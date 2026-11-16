@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "fetch:barn-swallow": "node scripts/fetch-barn-swallow.mjs",
+    "fetch:temperature": "node scripts/fetch-temperature.mjs"
   },
   "dependencies": {
     "gsap": "^3.15.1",
+    "maplibre-gl": "^6.18.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw climate downloads (rebuild with npm run fetch:temperature)
+tmp/
