@@ -2,52 +2,46 @@
 """
 Build local temperature assets for Make Sense.
 
-- Series: NASA GISTEMP v4 LOTI Direct CSV (global monthly anomalies)
-- Grid:   HadCRUT5 analysis ensemble mean (5° × 5°) for the map layer
+- Series: NASA GISTEMP v4 LOTI Direct CSV (global monthly *anomalies*)
+- Grid:   NCEP/NCAR Reanalysis monthly mean air temperature (*absolute* °C)
 
 Writes:
   public/data/temperature.json
+  public/data/temperature-grid.bin  (Int16 LE, °C × 100)
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import netCDF4 as nc
 
+try:
+    from scipy.ndimage import zoom as ndi_zoom
+except ImportError:
+    ndi_zoom = None
+
 ROOT = Path(__file__).resolve().parents[1]
 TMP = ROOT / "tmp" / "gistemp"
-OUT = ROOT / "public" / "data" / "temperature.json"
+OUT_JSON = ROOT / "public" / "data" / "temperature.json"
+OUT_BIN = ROOT / "public" / "data" / "temperature-grid.bin"
 
 YEAR_START = 2000
 YEAR_END = 2025
-MONTHS = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-]
 SCALE = 0.01
 MISSING = 32767
+# NCEP is already 2.5° — keep native for a smaller, faster local pack
+UPSAMPLE = 1
 
 
 def parse_gistemp_csv(path: Path) -> dict[str, float]:
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    # Skip title row; find header with Year,Jan,...
     header_idx = next(
         (i for i, ln in enumerate(lines) if ln.startswith("Year,") and "Jan" in ln),
         None,
@@ -74,64 +68,110 @@ def parse_gistemp_csv(path: Path) -> dict[str, float]:
     return series
 
 
-def extract_hadcrut_grid(path: Path) -> tuple[dict, bytes, list[str]]:
-    ds = nc.Dataset(str(path))
-    tas = ds.variables["tas_mean"]
-    time = ds.variables["time"][:]
-    lat = np.asarray(ds.variables["latitude"][:], dtype=np.float64)
-    lon = np.asarray(ds.variables["longitude"][:], dtype=np.float64)
+def upsample_field(filled: np.ndarray, factor: int) -> np.ndarray:
+    if factor <= 1:
+        return filled
+    mask = np.isfinite(filled)
+    if not mask.any():
+        return np.full(
+            (filled.shape[0] * factor, filled.shape[1] * factor),
+            np.nan,
+            dtype=np.float64,
+        )
+    work = filled.copy()
+    mean = float(np.nanmean(filled))
+    work[~mask] = mean
+    if ndi_zoom is not None:
+        up = ndi_zoom(work, zoom=factor, order=3, mode="nearest")
+        mask_up = (
+            ndi_zoom(mask.astype(np.float64), zoom=factor, order=0, mode="nearest")
+            > 0.5
+        )
+        up[~mask_up] = np.nan
+        return up
+    return np.repeat(np.repeat(work, factor, axis=0), factor, axis=1)
 
-    origin = datetime(1850, 1, 1)
+
+def extract_ncep_absolute(path: Path) -> tuple[dict, bytes, list[str]]:
+    ds = nc.Dataset(str(path))
+    air = ds.variables["air"]
+    lat = np.asarray(ds.variables["lat"][:], dtype=np.float64)
+    lon = np.asarray(ds.variables["lon"][:], dtype=np.float64)
+    times = nc.num2date(
+        ds.variables["time"][:],
+        ds.variables["time"].units,
+        only_use_cftime_datetimes=False,
+        only_use_python_datetimes=True,
+    )
+
+    # Lon 0..360 → -180..180, sorted
+    lon_shifted = ((lon + 180.0) % 360.0) - 180.0
+    lon_order = np.argsort(lon_shifted)
+    lon = lon_shifted[lon_order]
+
+    # Lat is N→S in NCEP; flip to S→N
+    flip_lat = lat[0] > lat[-1]
+    if flip_lat:
+        lat = lat[::-1]
+
     keys: list[str] = []
     chunks: list[bytes] = []
+    n_lat_out = n_lon_out = None
 
-    for i, t in enumerate(time):
-        d = origin + timedelta(days=float(t))
+    for i, d in enumerate(times):
         if d.year < YEAR_START or d.year > YEAR_END:
             continue
         key = f"{d.year}-{d.month:02d}"
-        arr = np.ma.array(tas[i, :, :])
-        filled = np.ma.filled(arr, np.nan).astype(np.float64)
+        arr = np.asarray(air[i], dtype=np.float64)
+        arr = arr[:, lon_order]
+        if flip_lat:
+            arr = arr[::-1, :]
 
-        # Encode as Int16 ×0.01; missing → 32767
-        scaled = np.full(filled.shape, MISSING, dtype=np.int16)
-        finite = np.isfinite(filled)
-        scaled[finite] = np.clip(
-            np.rint(filled[finite] / SCALE), -32000, 32000
-        ).astype(np.int16)
+        up = upsample_field(arr, UPSAMPLE)
+        if n_lat_out is None:
+            n_lat_out, n_lon_out = up.shape
+
+        scaled = np.full(up.shape, MISSING, dtype=np.int16)
+        finite = np.isfinite(up)
+        scaled[finite] = np.clip(np.rint(up[finite] / SCALE), -32000, 32000).astype(
+            np.int16
+        )
         keys.append(key)
         chunks.append(scaled.tobytes())
 
     if not keys:
-        raise RuntimeError("No HadCRUT months extracted for requested years")
+        raise RuntimeError("No NCEP months extracted for requested years")
 
-    # Cell centers → geographic extents for equirectangular image overlay
-    dlat = float(np.median(np.diff(lat))) if len(lat) > 1 else 5.0
-    dlon = float(np.median(np.diff(lon))) if len(lon) > 1 else 5.0
+    dlat = float(np.median(np.diff(lat))) if len(lat) > 1 else 2.5
+    dlon = float(np.median(np.diff(lon))) if len(lon) > 1 else 2.5
     lat_min = float(lat[0] - dlat / 2)
     lat_max = float(lat[-1] + dlat / 2)
     lon_min = float(lon[0] - dlon / 2)
     lon_max = float(lon[-1] + dlon / 2)
 
     meta = {
-        "nLat": int(lat.shape[0]),
-        "nLon": int(lon.shape[0]),
+        "nLat": int(n_lat_out),
+        "nLon": int(n_lon_out),
         "latMin": lat_min,
         "latMax": lat_max,
         "lonMin": lon_min,
         "lonMax": lon_max,
-        "cellSize": 5,
+        "cellSize": abs(dlat) / UPSAMPLE,
         "scale": SCALE,
         "missing": MISSING,
         "rowOrder": "south_to_north",
         "colOrder": "west_to_east",
+        "upsample": UPSAMPLE,
+        "nativeCellSize": abs(dlat),
+        "unit": "degC",
+        "quantity": "absolute",
     }
     return meta, b"".join(chunks), keys
 
 
 def main() -> int:
     csv_path = TMP / "GLB.Ts+dSST.csv"
-    nc_path = TMP / "HadCRUT5.nc"
+    nc_path = TMP / "air.mon.mean.nc"
     if not csv_path.exists():
         print(f"Missing {csv_path}", file=sys.stderr)
         return 1
@@ -140,17 +180,18 @@ def main() -> int:
         return 1
 
     series = parse_gistemp_csv(csv_path)
-    grid_meta, blob, keys = extract_hadcrut_grid(nc_path)
+    grid_meta, blob, keys = extract_ncep_absolute(nc_path)
 
     payload = {
         "meta": {
             "seriesSource": "NASA GISTEMP v4 Land-Ocean Temperature Index (Direct CSV)",
             "seriesUrl": "https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv",
             "seriesBaseline": "1951–1980",
-            "gridSource": "HadCRUT.5.0.2.0 analysis anomalies ensemble mean",
-            "gridUrl": "https://www.metoffice.gov.uk/hadobs/hadcrut5/",
-            "gridBaseline": "1961–1990",
-            "note": "Series drives the global anomaly readout; HadCRUT5 5° grid paints the map layer. Baselines differ slightly between products.",
+            "seriesQuantity": "anomaly",
+            "gridSource": "NCEP/NCAR Reanalysis monthly mean air temperature (absolute °C)",
+            "gridUrl": "https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis.derived/surface/air.mon.mean.nc",
+            "gridQuantity": "absolute",
+            "note": "Map colors use absolute air temperature (°C). The panel readout still shows GISTEMP global anomaly.",
             "yearStart": YEAR_START,
             "yearEnd": YEAR_END,
             "monthCount": len(keys),
@@ -161,16 +202,23 @@ def main() -> int:
         "grid": {
             **grid_meta,
             "keys": keys,
-            "encoding": "int16-le-base64",
-            "data": base64.b64encode(blob).decode("ascii"),
+            "encoding": "int16-le",
+            "bin": "temperature-grid.bin",
         },
     }
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    size_mb = OUT.stat().st_size / (1024 * 1024)
-    print(f"Wrote {OUT} ({size_mb:.2f} MB)")
-    print(f"Series months: {len(series)} · Grid months: {len(keys)}")
+    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    OUT_JSON.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    OUT_BIN.write_bytes(blob)
+
+    print(
+        f"Wrote {OUT_JSON.name} ({OUT_JSON.stat().st_size / 1024:.1f} KB) + "
+        f"{OUT_BIN.name} ({OUT_BIN.stat().st_size / (1024 * 1024):.2f} MB)"
+    )
+    print(
+        f"Series months: {len(series)} · Grid months: {len(keys)} · "
+        f"{grid_meta['nLat']}×{grid_meta['nLon']} (~{grid_meta['cellSize']}°) absolute °C"
+    )
     return 0
 
 

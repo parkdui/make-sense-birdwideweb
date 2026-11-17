@@ -15,10 +15,20 @@ export function useTemperatureData() {
     ;(async () => {
       try {
         setState((s) => ({ ...s, status: 'loading', error: null }))
-        const res = await fetch(TEMPERATURE.url)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const json = await res.json()
-        const pack = decodeTemperaturePayload(json)
+        const jsonRes = await fetch(TEMPERATURE.url)
+        if (!jsonRes.ok) throw new Error(`HTTP ${jsonRes.status}`)
+        const json = await jsonRes.json()
+
+        let binBuffer = null
+        const binName = json?.grid?.bin
+        if (binName) {
+          const binUrl = TEMPERATURE.url.replace(/[^/]+$/, binName)
+          const binRes = await fetch(binUrl)
+          if (!binRes.ok) throw new Error(`Grid binary HTTP ${binRes.status}`)
+          binBuffer = await binRes.arrayBuffer()
+        }
+
+        const pack = decodeTemperaturePayload(json, binBuffer)
         if (!cancelled) {
           setState({ status: 'ready', error: null, pack })
         }

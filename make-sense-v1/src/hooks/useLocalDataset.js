@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DATASET } from '../config.js'
 import { isValidOccurrence } from '../utils/occurrences.js'
 
 /**
- * Load the curated local GBIF sample (no live API on startup).
+ * Load a curated local GBIF sample (no live API on startup).
+ * @param {string} datasetUrl path under /public, e.g. /data/hirundo-rustica.json
+ * @param {string} [fetchHint] npm script name shown in error messages
  */
-export function useLocalDataset() {
+export function useLocalDataset(datasetUrl, fetchHint = 'npm run fetch:barn-swallow') {
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
@@ -15,12 +16,19 @@ export function useLocalDataset() {
     const id = ++requestRef.current
     setStatus('loading')
     setError(null)
+    setData(null)
+
+    if (!datasetUrl) {
+      setStatus('error')
+      setError('No dataset URL configured for this species.')
+      return
+    }
 
     try {
-      const response = await fetch(DATASET.url, { cache: 'no-cache' })
+      const response = await fetch(datasetUrl, { cache: 'no-cache' })
       if (!response.ok) {
         throw new Error(
-          `Could not load local dataset (${response.status}). Run: npm run fetch:barn-swallow`,
+          `Could not load local dataset (${response.status}). Run: ${fetchHint}`,
         )
       }
 
@@ -33,7 +41,7 @@ export function useLocalDataset() {
 
       if (records.length === 0) {
         throw new Error(
-          'Local dataset contained no valid occurrence records. Re-run npm run fetch:barn-swallow.',
+          `Local dataset contained no valid occurrence records. Re-run ${fetchHint}.`,
         )
       }
 
@@ -52,7 +60,7 @@ export function useLocalDataset() {
           : 'Failed to load the local occurrence dataset.',
       )
     }
-  }, [])
+  }, [datasetUrl, fetchHint])
 
   useEffect(() => {
     load()

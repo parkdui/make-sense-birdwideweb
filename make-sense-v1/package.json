@@ -9,6 +9,11 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "fetch:barn-swallow": "node scripts/fetch-barn-swallow.mjs",
+    "fetch:european-bee-eater": "node scripts/fetch-european-bee-eater.mjs",
+    "fetch:common-crane": "node scripts/fetch-common-crane.mjs",
+    "fetch:eurasian-blackcap": "node scripts/fetch-eurasian-blackcap.mjs",
+    "fetch:blackpoll-warbler": "node scripts/fetch-blackpoll-warbler.mjs",
+    "enrich:month-counts": "node scripts/enrich-month-counts.mjs",
     "fetch:temperature": "node scripts/fetch-temperature.mjs"
   },
   "dependencies": {

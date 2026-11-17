@@ -1,4 +1,4 @@
-import { SPECIES, TIMELINE } from '../config.js'
+import { TIMELINE } from '../config.js'
 import { formatLicenseLabel } from '../utils/occurrences.js'
 
 function formatAnomaly(v) {
@@ -11,11 +11,12 @@ export default function InfoPanel({
   year,
   month,
   visibleCount,
-  januaryCount,
   monthRecordCount,
+  gbifOccurrenceCount,
   yearRecordCount,
   totalCount,
   meta,
+  speciesInfo,
   temperatureMeta,
   globalAnomaly,
   tempStatus,
@@ -25,14 +26,39 @@ export default function InfoPanel({
   const retrievedAt = meta?.retrievedAt
     ? new Date(meta.retrievedAt).toLocaleString()
     : '—'
+  const commonName = speciesInfo?.commonName ?? meta?.commonName ?? 'Species'
+  const scientificName =
+    speciesInfo?.scientificName ?? meta?.scientificName ?? ''
+  const speciesUrl =
+    speciesInfo?.gbifSpeciesUrl ??
+    meta?.speciesPage ??
+    'https://www.gbif.org/'
+  const imageUrl = speciesInfo?.imageUrl
+  const imageCredit = speciesInfo?.imageCredit
 
   return (
     <aside className="info-panel" aria-label="Species and data information">
+      {imageUrl && (
+        <figure className="info-panel__figure">
+          <img
+            className="info-panel__image"
+            src={imageUrl}
+            alt={commonName}
+            loading="lazy"
+            decoding="async"
+          />
+          {imageCredit && (
+            <figcaption className="info-panel__image-credit">
+              Photo · {imageCredit}
+            </figcaption>
+          )}
+        </figure>
+      )}
       <header className="info-panel__header">
         <p className="info-panel__eyebrow">Migration visualization</p>
-        <h1>{SPECIES.commonName}</h1>
+        <h1>{commonName}</h1>
         <p className="info-panel__scientific">
-          <em>{SPECIES.scientificName}</em>
+          <em>{scientificName}</em>
         </p>
       </header>
 
@@ -44,7 +70,7 @@ export default function InfoPanel({
           </dd>
         </div>
         <div>
-          <dt>Global anomaly</dt>
+          <dt>GISTEMP anomaly</dt>
           <dd>
             {tempStatus === 'ready' ? formatAnomaly(globalAnomaly) : '—'}
           </dd>
@@ -54,11 +80,15 @@ export default function InfoPanel({
           <dd>{status === 'ready' ? visibleCount.toLocaleString() : '—'}</dd>
         </div>
         <div>
-          <dt>January records</dt>
-          <dd>{status === 'ready' ? januaryCount.toLocaleString() : '—'}</dd>
+          <dt>GBIF this month</dt>
+          <dd>
+            {status === 'ready' && gbifOccurrenceCount != null
+              ? gbifOccurrenceCount.toLocaleString()
+              : '—'}
+          </dd>
         </div>
         <div>
-          <dt>Month sample</dt>
+          <dt>Local sample</dt>
           <dd>
             {status === 'ready' ? monthRecordCount.toLocaleString() : '—'}
           </dd>
@@ -66,13 +96,18 @@ export default function InfoPanel({
       </dl>
 
       <p className="info-panel__disclaimer">
-        Temperature layer: white → yellow → red over a grayscale basemap.
-        Bird dots move with the monthly timeline. Not individual GPS tracks.
+        Map colors are absolute air temperature (°C): white ≤ −20°C through
+        yellow and red to purple ≥ 38°C. The number above is GISTEMP global
+        anomaly, not absolute heat. Not individual GPS tracks.
       </p>
 
       <p className="info-panel__source">
         <a href="https://www.gbif.org/" target="_blank" rel="noopener noreferrer">
           GBIF
+        </a>
+        {' · '}
+        <a href={speciesUrl} target="_blank" rel="noopener noreferrer">
+          species
         </a>
         {' · '}
         <a
@@ -84,11 +119,11 @@ export default function InfoPanel({
         </a>
         {' · '}
         <a
-          href="https://www.metoffice.gov.uk/hadobs/hadcrut5/"
+          href="https://psl.noaa.gov/data/gridded/data.ncep.reanalysis.html"
           target="_blank"
           rel="noopener noreferrer"
         >
-          HadCRUT5
+          NCEP
         </a>
         {status === 'ready' && (
           <>

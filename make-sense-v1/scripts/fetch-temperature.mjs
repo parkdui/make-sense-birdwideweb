@@ -3,7 +3,7 @@
  * Fetch local temperature inputs, then build public/data/temperature.json
  *
  * - NASA GISTEMP v4 Direct CSV → global monthly anomaly series
- * - HadCRUT5 NetCDF → 5° map grid (NetCDF4 / HDF5; converted via Python)
+ * - NCEP/NCAR air.mon.mean.nc → absolute °C map grid
  *
  * Run: npm run fetch:temperature
  */
@@ -18,8 +18,8 @@ const ROOT = path.resolve(__dirname, '..')
 const TMP = path.join(ROOT, 'tmp', 'gistemp')
 const CSV_URL =
   'https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv'
-const HADCRUT_URL =
-  'https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/HadCRUT.5.0.2.0.analysis.anomalies.ensemble_mean.nc'
+const NCEP_URL =
+  'https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis.derived/surface/air.mon.mean.nc'
 
 async function exists(p) {
   try {
@@ -59,7 +59,9 @@ function runPythonBuild() {
     env: process.env,
   })
   if (result.status !== 0) {
-    throw new Error('Python build failed — need python3 + netCDF4 (pip install netCDF4)')
+    throw new Error(
+      'Python build failed — need python3 + netCDF4 (+ scipy recommended)',
+    )
   }
 }
 
@@ -76,7 +78,7 @@ async function main() {
     console.warn(`CSV download failed (${err.message}); using cached file`)
   }
 
-  await download(HADCRUT_URL, path.join(TMP, 'HadCRUT5.nc'), { force })
+  await download(NCEP_URL, path.join(TMP, 'air.mon.mean.nc'), { force })
   runPythonBuild()
 }
 

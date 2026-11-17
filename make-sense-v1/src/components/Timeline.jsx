@@ -3,7 +3,7 @@ import { GBIF, TIMELINE } from '../config.js'
 
 /**
  * Year selector + auto-advancing Jan–Dec month slider.
- * Flock size is fixed from January record count for the year.
+ * Dot count scales with GBIF monthly occurrence (10–100).
  */
 export default function Timeline({
   year,
@@ -153,9 +153,9 @@ export default function Timeline({
       </div>
 
       <p className="timeline__note">
-        {flockSize.toLocaleString()} dots leave red trails toward {monthName} (
-        {monthRecordCount} records). Year total:{' '}
-        {yearRecordCount.toLocaleString()}.
+        {flockSize.toLocaleString()} dots (scaled 10–100 from GBIF month
+        volume) move toward {monthName} sample positions ({monthRecordCount}{' '}
+        local). Year sample: {yearRecordCount.toLocaleString()}.
       </p>
     </section>
   )
