@@ -167,7 +167,7 @@ export const MAP = {
     bearing: 0,
     pitch: 0,
   },
-  /** Camera zoom while following one species. */
+  /** Steady zoom while following one bird. */
   followZoom: 5,
   pointColor: '#e10600',
   /** Monthly northernmost / southernmost latitude lines (occurrence sample). */

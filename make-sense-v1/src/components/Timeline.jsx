@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GBIF, SPECIES_CATALOG } from '../config.js'
 import { useNorthernmost } from '../hooks/useNorthernmost.js'
 
@@ -140,6 +140,64 @@ export default function Timeline({
         <span className="timeline__year-end">{last}</span>
       </div>
     </section>
+  )
+}
+
+export const PLAY_SPEEDS = [0.5, 1, 1.5, 2]
+
+export function PlaySpeed({ speed, disabled, onChange }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onPointer = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div className="map-speed" ref={rootRef}>
+      <button
+        type="button"
+        className="map-speed__button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+      >
+        play speed: {speed.toFixed(1)}x
+      </button>
+      {open && (
+        <ul className="map-speed__menu" role="listbox" aria-label="Play speed">
+          {PLAY_SPEEDS.map((value) => (
+            <li key={value}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === speed}
+                className={value === speed ? 'is-on' : undefined}
+                onClick={() => {
+                  onChange(value)
+                  setOpen(false)
+                }}
+              >
+                {value.toFixed(1)}x
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

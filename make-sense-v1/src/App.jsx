@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MapView from './components/MapView.jsx'
 import SpeciesSelector from './components/SpeciesSelector.jsx'
-import Timeline, { PlayButton } from './components/Timeline.jsx'
+import Timeline, { PlayButton, PlaySpeed } from './components/Timeline.jsx'
 import { FLOCK, SPECIES_CATALOG, TEMPERATURE, TIMELINE } from './config.js'
 import { useSpeciesDatasets } from './hooks/useSpeciesDatasets.js'
 import { useTemperatureData } from './hooks/useTemperatureData.js'
@@ -86,6 +86,7 @@ export default function App() {
   const [year, setYear] = useState(null)
   const [month, setMonth] = useState(1)
   const [playing, setPlaying] = useState(false)
+  const [playSpeed, setPlaySpeed] = useState(1)
   const [summer, setSummer] = useState(false)
   const [winter, setWinter] = useState(false)
   /** Time already spent in the current month while playback was running. */
@@ -164,9 +165,10 @@ export default function App() {
   useEffect(() => {
     if (!playing || !ready) return undefined
     const started = performance.now()
+    const speed = playSpeed
     const remaining = Math.max(
       0,
-      TIMELINE.monthMs - monthElapsedRef.current,
+      (TIMELINE.monthMs - monthElapsedRef.current) / speed,
     )
     let completed = false
     const id = window.setTimeout(() => {
@@ -193,10 +195,10 @@ export default function App() {
     return () => {
       window.clearTimeout(id)
       if (!completed) {
-        monthElapsedRef.current += performance.now() - started
+        monthElapsedRef.current += (performance.now() - started) * speed
       }
     }
-  }, [playing, ready, month, activeYear, summer, winter])
+  }, [playing, ready, month, activeYear, summer, winter, playSpeed])
 
   /** Keep flocks dense even when several species share the map. */
   const perSpeciesMaxDots = useMemo(() => {
@@ -265,6 +267,7 @@ export default function App() {
         color: f.color,
         yearRecords: f.yearRecords,
         flockSize: f.flockSize,
+        name: f.species?.commonName ?? '',
       })),
     [flockSpecs],
   )
@@ -308,6 +311,7 @@ export default function App() {
           year={activeYear}
           month={month}
           playing={playing}
+          playSpeed={playSpeed}
           seasonGlide={seasonGlideRef.current}
           followId={followId}
           temperaturePack={temperaturePack}
@@ -355,6 +359,11 @@ export default function App() {
               </span>
             </div>
           </div>
+          <PlaySpeed
+            speed={playSpeed}
+            disabled={controlsDisabled}
+            onChange={setPlaySpeed}
+          />
           <div className="map-time">
             {TIMELINE.months[month - 1] ?? ''} {activeYear}
           </div>

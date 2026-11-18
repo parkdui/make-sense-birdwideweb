@@ -37,59 +37,75 @@ function expandPositions(pool, flockSize) {
 }
 
 /**
- * Arrange birds into one or more V formations (Common Crane style).
- * Tip points roughly south / SSW; arms trail behind.
- * Offsets are in degrees so the V reads at continental zoom.
+ * Common cranes travel as one or more V skeins.
+ * The point of the V faces the direction of flight. Spacing is in degrees
+ * so the chevron still reads on the overview map.
  */
-function expandAsVFormation(pool, flockSize) {
-  if (!pool.length || flockSize <= 0) return []
+function vMetrics(flockSize) {
+  // One skein, like a real crane flock. Extra dots would fill the V into a wedge.
+  const count = Math.max(3, Math.min(flockSize, 11))
+  return { birdsPerV: count, backStep: 2.15, sideStep: 1.7 }
+}
 
-  const birdsPerV =
-    flockSize <= 7
-      ? flockSize
-      : Math.min(11, Math.max(7, Math.round(flockSize / Math.ceil(flockSize / 9))))
-  const numFlocks = Math.ceil(flockSize / birdsPerV)
+export function formationDirection(from, to, fallback = { dirLng: 0, dirLat: 1 }) {
+  if (!from || !to) return fallback
+  const dirLng = to.lng - from.lng
+  const dirLat = to.lat - from.lat
+  const len = Math.hypot(dirLng, dirLat)
+  if (len < 0.05) return fallback
+  return { dirLng: dirLng / len, dirLat: dirLat / len }
+}
+
+/** Shortest-turn blend so a skein rotates onto its new course without spinning the long way. */
+export function lerpFormationDirection(from, to, t) {
+  const aAng = Math.atan2(from.dirLng, from.dirLat)
+  const bAng = Math.atan2(to.dirLng, to.dirLat)
+  let delta = bAng - aAng
+  while (delta > Math.PI) delta -= Math.PI * 2
+  while (delta < -Math.PI) delta += Math.PI * 2
+  const ang = aAng + delta * t
+  return { dirLng: Math.sin(ang), dirLat: Math.cos(ang) }
+}
+
+export function monthAnchor(yearRecords, month) {
+  const pool = monthPositions(yearRecords, month)
+  if (!pool.length) return null
+  return pool[Math.floor((pool.length - 1) / 2)]
+}
+
+export function layoutVFormation(tip, dir, flockSize, gbifID) {
+  const { birdsPerV, backStep, sideStep } = vMetrics(flockSize)
+  const count = Math.min(flockSize, birdsPerV)
+  const perpLng = -dir.dirLat
+  const perpLat = dir.dirLng
   const out = []
-
-  for (let f = 0; f < numFlocks; f += 1) {
-    const lead = pool[Math.floor((f / numFlocks) * pool.length) % pool.length]
-    const count = Math.min(birdsPerV, flockSize - out.length)
-    // Bearing from north (rad): π = south; slight SSW/SSE variety per sub-flock.
-    const bearing = Math.PI + (f % 2 === 0 ? -0.28 : 0.28)
-    const dirLng = Math.sin(bearing)
-    const dirLat = Math.cos(bearing)
-    const perpLng = -dirLat
-    const perpLat = dirLng
-    const backStep = 0.52
-    const sideStep = 0.4
-
-    for (let k = 0; k < count; k += 1) {
-      let dlng = 0
-      let dlat = 0
-      if (k > 0) {
-        const wing = k % 2 === 1 ? -1 : 1
-        const rank = Math.ceil(k / 2)
-        const back = rank * backStep
-        const side = rank * sideStep
-        // Behind the tip = opposite of travel direction
-        dlng = -dirLng * back + perpLng * wing * side
-        dlat = -dirLat * back + perpLat * wing * side
-      }
-      out.push({
-        lng: lead.lng + dlng,
-        lat: lead.lat + dlat,
-        gbifID: lead.gbifID,
-        formationDirLng: dirLng,
-        formationDirLat: dirLat,
-      })
-    }
+  for (let k = 0; k < count; k += 1) {
+    const wing = k === 0 ? 0 : k % 2 === 1 ? -1 : 1
+    const rank = k === 0 ? 0 : Math.ceil(k / 2)
+    const back = rank * backStep
+    const side = wing * rank * sideStep
+    out.push({
+      lng: tip.lng - dir.dirLng * back + perpLng * side,
+      lat: tip.lat - dir.dirLat * back + perpLat * side,
+      gbifID,
+      formationDirLng: dir.dirLng,
+      formationDirLat: dir.dirLat,
+    })
   }
-
   return out
 }
 
-function expandForFormation(pool, flockSize, formation) {
-  if (formation === 'v') return expandAsVFormation(pool, flockSize)
+function expandAsVFormation(pool, flockSize, direction) {
+  if (!pool.length || flockSize <= 0) return []
+  const tip = pool[Math.floor((pool.length - 1) / 2)]
+  const dir =
+    direction ??
+    formationDirection(pool[0], pool[pool.length - 1], { dirLng: 0, dirLat: 1 })
+  return layoutVFormation(tip, dir, flockSize, tip.gbifID)
+}
+
+function expandForFormation(pool, flockSize, formation, direction) {
+  if (formation === 'v') return expandAsVFormation(pool, flockSize, direction)
   return expandPositions(pool, flockSize)
 }
 
@@ -205,5 +221,10 @@ export function resizeFlock(birds, yearRecords, month, flockSize) {
 export function getMonthTargets(yearRecords, month, flockSize, options = {}) {
   const pool = monthPositions(yearRecords, month)
   if (!pool.length || flockSize <= 0) return null
-  return expandForFormation(pool, flockSize, options.formation ?? 'scatter')
+  return expandForFormation(
+    pool,
+    flockSize,
+    options.formation ?? 'scatter',
+    options.direction,
+  )
 }

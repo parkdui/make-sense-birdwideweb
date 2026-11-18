@@ -8,7 +8,7 @@ import {
   headingFromTrail,
   markerForSpecies,
 } from '../utils/birdMarkers.js'
-import { buildFlock, getMonthTargets } from '../utils/migrationFlock.js'
+import { buildFlock, formationDirection, getMonthTargets, layoutVFormation, lerpFormationDirection, monthAnchor } from '../utils/migrationFlock.js'
 import { getMonthLatExtremes } from '../utils/latExtremes.js'
 import { createThreeFlock } from '../utils/threeFlock.js'
 import {
@@ -108,7 +108,7 @@ function strokeLatitude(ctx, map, lat, color) {
 
 const BADGE_FONT = '600 12px "DM Sans", system-ui, sans-serif'
 
-function queueExtremeBadge(ctx, map, lng, lat, color, text, badges) {
+function queueExtremeBadge(ctx, map, lng, lat, color, text, badges, name) {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
   const point = map.project([lng, lat])
   ctx.beginPath()
@@ -119,6 +119,8 @@ function queueExtremeBadge(ctx, map, lng, lat, color, text, badges) {
   ctx.font = BADGE_FONT
   const padX = 9
   const height = 22
+  const gap = 6
+  const label = typeof name === 'string' ? name.trim() : ''
   badges.push({
     x: point.x + 12,
     y: point.y,
@@ -126,12 +128,23 @@ function queueExtremeBadge(ctx, map, lng, lat, color, text, badges) {
     h: height,
     text,
     color,
+    companion: label
+      ? {
+          gap,
+          w: ctx.measureText(label).width + padX * 2,
+          h: height,
+          text: label,
+          color,
+        }
+      : null,
   })
 }
 
 /** Slide a badge right when it would cover another bird's badge. */
 function separateBadges(badges) {
   const gap = 6
+  const span = (badge) =>
+    badge.w + (badge.companion ? badge.companion.gap + badge.companion.w : 0)
   const ordered = [...badges].sort((a, b) => a.y - b.y || a.x - b.x)
   for (let i = 0; i < ordered.length; i += 1) {
     const badge = ordered[i]
@@ -139,7 +152,7 @@ function separateBadges(badges) {
       const other = ordered[j]
       const overlapY = Math.abs(badge.y - other.y) < (badge.h + other.h) / 2
       if (!overlapY) continue
-      const minX = other.x + other.w + gap
+      const minX = other.x + span(other) + gap
       if (badge.x < minX) badge.x = minX
     }
   }
@@ -158,6 +171,16 @@ function paintBadge(ctx, badge) {
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.fillText(badge.text, left + 9, badge.y + 0.5)
+  if (badge.companion) {
+    paintBadge(ctx, {
+      x: left + badge.w + badge.companion.gap,
+      y: badge.y,
+      w: badge.companion.w,
+      h: badge.companion.h,
+      text: badge.companion.text,
+      color: badge.companion.color,
+    })
+  }
 }
 
 /**
@@ -201,6 +224,7 @@ function drawSpeciesExtremes(ctx, map, bands) {
       band.color,
       formatExtremeLabel('N', band.northLat),
       badges,
+      band.name,
     )
     queueExtremeBadge(
       ctx,
@@ -258,6 +282,7 @@ export default function MapView({
   year,
   month,
   playing = true,
+  playSpeed = 1,
   seasonGlide = false,
   followId = null,
   temperaturePack,
@@ -287,6 +312,8 @@ export default function MapView({
   const followArmedRef = useRef(false)
   const followEaseDoneRef = useRef(false)
   const followTargetRef = useRef(null)
+  /** Index of the single bird the camera stays on. */
+  const followBirdIndexRef = useRef(null)
   const followSinceRef = useRef(0)
   const followTempAtRef = useRef(0)
   const tempPaintRef = useRef({
@@ -308,6 +335,7 @@ export default function MapView({
     year,
     month,
     playing,
+    playSpeed,
     seasonGlide,
     followId,
     temperaturePack,
@@ -317,6 +345,7 @@ export default function MapView({
     year,
     month,
     playing,
+    playSpeed,
     seasonGlide,
     followId,
     temperaturePack,
@@ -416,124 +445,38 @@ export default function MapView({
   }
 
   /**
-   * The crowded part of one species. A few distant birds must not
-   * pull the camera off the main mass.
+   * One bird for this follow. The same slot flies onward to a single
+   * occurrence each month, so the camera has one continuous path.
    */
-  const followCore = (id) => {
-    const birds = (flocksRef.current.get(id)?.birds ?? []).filter(
-      (bird) => Number.isFinite(bird.lat) && Number.isFinite(bird.lng),
-    )
+  const followBird = (id) => {
+    const birds = flocksRef.current.get(id)?.birds ?? []
     if (!birds.length) return null
 
-    const cell = 1
-    const bins = new Map()
-    for (const bird of birds) {
-      const gx = Math.round(bird.lng / cell)
-      const gy = Math.round(bird.lat / cell)
-      const key = `${gx}:${gy}`
-      let bin = bins.get(key)
-      if (!bin) {
-        bin = { birds: [], gx, gy }
-        bins.set(key, bin)
+    let index = followBirdIndexRef.current
+    const held = birds[index]
+    if (
+      !held ||
+      index >= birds.length ||
+      !Number.isFinite(held.lat) ||
+      !Number.isFinite(held.lng)
+    ) {
+      // The first pass is that month's records, in latitude order, without jitter.
+      const seen = new Set()
+      let pool = 0
+      for (const bird of birds) {
+        if (!Number.isFinite(bird.lat) || !Number.isFinite(bird.lng)) continue
+        if (seen.has(bird.gbifID)) break
+        seen.add(bird.gbifID)
+        pool += 1
       }
-      bin.birds.push(bird)
+      if (!pool) return null
+      index = Math.floor((pool - 1) / 2)
+      followBirdIndexRef.current = index
     }
 
-    // Score each cell by the birds in the surrounding crowd, so a spike
-    // on the edge of the flock does not beat the main mass.
-    const reach = 2
-    let best = null
-    let bestScore = -1
-    for (const bin of bins.values()) {
-      let score = 0
-      for (const other of bins.values()) {
-        if (
-          Math.abs(other.gx - bin.gx) <= reach &&
-          Math.abs(other.gy - bin.gy) <= reach
-        ) {
-          score += other.birds.length
-        }
-      }
-      if (score > bestScore) {
-        best = bin
-        bestScore = score
-      }
-    }
-
-    const group = []
-    for (const other of bins.values()) {
-      if (
-        Math.abs(other.gx - best.gx) <= reach &&
-        Math.abs(other.gy - best.gy) <= reach
-      ) {
-        group.push(...other.birds)
-      }
-    }
-    return group.length ? group : best.birds
-  }
-
-  const followFrame = (map, group) => {
-    let west = Infinity
-    let east = -Infinity
-    let south = Infinity
-    let north = -Infinity
-    let lng = 0
-    let lat = 0
-    for (const bird of group) {
-      lng += bird.lng
-      lat += bird.lat
-      west = Math.min(west, bird.lng)
-      east = Math.max(east, bird.lng)
-      south = Math.min(south, bird.lat)
-      north = Math.max(north, bird.lat)
-    }
-    lng /= group.length
-    lat /= group.length
-    const halfLng = Math.max(lng - west, east - lng, 0.45)
-    const halfLat = Math.max(lat - south, north - lat, 0.35)
-    const padLng = Math.max(0.4, halfLng * 0.45)
-    const padLat = Math.max(0.3, halfLat * 0.45)
-    let zoom = MAP.followZoom
-    try {
-      zoom =
-        map.cameraForBounds(
-          [
-            [lng - halfLng - padLng, lat - halfLat - padLat],
-            [lng + halfLng + padLng, lat + halfLat + padLat],
-          ],
-          { padding: 72, maxZoom: 6.2 },
-        )?.zoom ?? MAP.followZoom
-    } catch {
-      zoom = MAP.followZoom
-    }
-    return { lng, lat, zoom }
-  }
-
-  /**
-   * Pan so the projected middle of the main flock sits on the viewport center.
-   * Returns the lng/lat that should become the camera center.
-   */
-  const followCenter = (map, group, fallback) => {
-    const canvas = map.getCanvas()
-    const width = canvas?.clientWidth || 0
-    const height = canvas?.clientHeight || 0
-    if (!width || !height) return fallback
-    let sx = 0
-    let sy = 0
-    let count = 0
-    for (const bird of group) {
-      const point = map.project([bird.lng, bird.lat])
-      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue
-      sx += point.x
-      sy += point.y
-      count += 1
-    }
-    if (!count) return fallback
-    sx /= count
-    sy /= count
-    const next = map.unproject([width / 2 + (sx - width / 2), height / 2 + (sy - height / 2)])
-    if (!Number.isFinite(next?.lng) || !Number.isFinite(next?.lat)) return fallback
-    return { lng: next.lng, lat: next.lat }
+    const bird = birds[index]
+    if (!bird || !Number.isFinite(bird.lat) || !Number.isFinite(bird.lng)) return null
+    return bird
   }
 
   const trackFollowCamera = () => {
@@ -544,10 +487,11 @@ export default function MapView({
       followTargetRef.current = id
       followArmedRef.current = false
       followEaseDoneRef.current = false
+      followBirdIndexRef.current = null
     }
-    const group = followCore(id)
-    if (!group) return
-    const frame = followFrame(map, group)
+    const bird = followBird(id)
+    if (!bird) return
+    const zoom = MAP.followZoom
 
     if (!followArmedRef.current) {
       followArmedRef.current = true
@@ -556,8 +500,8 @@ export default function MapView({
       followMoveRef.current = true
       map.stop()
       map.easeTo({
-        center: [frame.lng, frame.lat],
-        zoom: frame.zoom,
+        center: [bird.lng, bird.lat],
+        zoom,
         bearing: MAP.initialView.bearing,
         pitch: MAP.initialView.pitch,
         duration: 900,
@@ -576,22 +520,17 @@ export default function MapView({
       followEaseDoneRef.current = true
     }
 
-    const zoomSettled = Math.abs(map.getZoom() - frame.zoom) < 0.2
-    const zoom = zoomSettled ? map.getZoom() : frame.zoom
-    const center = zoomSettled
-      ? followCenter(map, group, frame)
-      : frame
-    const current = map.getCenter()
+    const center = map.getCenter()
     if (
-      zoomSettled &&
-      Math.abs(current.lng - center.lng) < 0.0015 &&
-      Math.abs(current.lat - center.lat) < 0.0015
+      Math.abs(center.lng - bird.lng) < 0.0004 &&
+      Math.abs(center.lat - bird.lat) < 0.0004 &&
+      Math.abs(map.getZoom() - zoom) < 0.02
     ) {
       return
     }
     followMoveRef.current = true
     map.jumpTo({
-      center: [center.lng, center.lat],
+      center: [bird.lng, bird.lat],
       zoom,
       bearing: MAP.initialView.bearing,
       pitch: MAP.initialView.pitch,
@@ -755,6 +694,7 @@ export default function MapView({
       next.push({
         id: flock.id,
         color: flock.color || MAP.pointColor,
+        name: flock.name || '',
         northLat: extremes.northLat,
         southLat: extremes.southLat,
         northLng: extremes.northLng,
@@ -792,6 +732,7 @@ export default function MapView({
     const frameFrom = next.map((band, index) => ({
       id: band.id,
       color: band.color,
+      name: band.name,
       northLat: from[index].northLat,
       southLat: from[index].southLat,
       northLng: from[index].northLng,
@@ -820,6 +761,7 @@ export default function MapView({
         extremesRef.current = next.map((band, index) => ({
           id: band.id,
           color: band.color,
+          name: band.name,
           northLat:
             from[index].northLat + (band.northLat - from[index].northLat) * t,
           southLat:
@@ -838,6 +780,7 @@ export default function MapView({
         scheduleDraw()
       },
     })
+    tween.timeScale(propsRef.current.playSpeed || 1)
     extremeTweenRef.current = tween
   }
 
@@ -882,14 +825,30 @@ export default function MapView({
     size,
     { immediate = false } = {},
   ) => {
-    const targets = getMonthTargets(records ?? [], monthValue, size, {
-      formation: formationFor(flockId),
-    })
+    const formation = formationFor(flockId)
     const entry = flocksRef.current.get(flockId) ?? {
       birds: [],
       seededKey: '',
       color,
     }
+    let direction
+    if (formation === 'v') {
+      const anchor = monthAnchor(records, monthValue)
+      const prev = entry.birds?.[0]
+      direction = formationDirection(
+        prev && Number.isFinite(prev.lng)
+          ? { lng: prev.lng, lat: prev.lat }
+          : null,
+        anchor,
+        prev && Number.isFinite(prev.formationDirLng)
+          ? { dirLng: prev.formationDirLng, dirLat: prev.formationDirLat }
+          : null,
+      )
+    }
+    const targets = getMonthTargets(records ?? [], monthValue, size, {
+      formation,
+      direction,
+    })
 
     if (!targets?.length) {
       entry.birds = []
@@ -1033,6 +992,59 @@ export default function MapView({
 
       if (immediate) continue
 
+      if (formationFor(flock.id) === 'v') {
+        const fromTip = { lng: nextBirds[0].lng, lat: nextBirds[0].lat }
+        const toTip = { lng: targets[0].lng, lat: targets[0].lat }
+        const toDir = {
+          dirLng: targets[0].formationDirLng ?? 0,
+          dirLat: targets[0].formationDirLat ?? 1,
+        }
+        const fromDir = {
+          dirLng: nextBirds[0].formationDirLng ?? toDir.dirLng,
+          dirLat: nextBirds[0].formationDirLat ?? toDir.dirLat,
+        }
+        const gbifID = targets[0].gbifID
+        const motion = { t: 0 }
+        tweens.push(
+          gsap.to(motion, {
+            t: 1,
+            duration,
+            ease: 'none',
+            paused: !propsRef.current.playing,
+            onUpdate: () => {
+              const t = motion.t * motion.t * (3 - 2 * motion.t)
+              const tip = {
+                lng: fromTip.lng + (toTip.lng - fromTip.lng) * t,
+                lat: fromTip.lat + (toTip.lat - fromTip.lat) * t,
+              }
+              const dir = lerpFormationDirection(fromDir, toDir, t)
+              const placed = layoutVFormation(tip, dir, nextBirds.length, gbifID)
+              for (let i = 0; i < nextBirds.length; i += 1) {
+                const bird = nextBirds[i]
+                const slot = placed[i]
+                if (!slot) continue
+                bird.lng = slot.lng
+                bird.lat = slot.lat
+                bird.formationDirLng = dir.dirLng
+                bird.formationDirLat = dir.dirLat
+              }
+              paint()
+            },
+            onComplete: () => {
+              for (let i = 0; i < nextBirds.length; i += 1) {
+                nextBirds[i].lng = targets[i].lng
+                nextBirds[i].lat = targets[i].lat
+                nextBirds[i].gbifID = targets[i].gbifID
+                nextBirds[i].formationDirLng = targets[i].formationDirLng
+                nextBirds[i].formationDirLat = targets[i].formationDirLat
+              }
+              paint()
+            },
+          }),
+        )
+        continue
+      }
+
       for (let i = 0; i < nextBirds.length; i += 1) {
         const bird = nextBirds[i]
         const target = targets[i]
@@ -1101,6 +1113,9 @@ export default function MapView({
       resume() {
         tweens.forEach((t) => t.resume())
       },
+      timeScale(scale) {
+        tweens.forEach((t) => t.timeScale(scale))
+      },
       kill() {
         for (const { nextBirds, targets } of snapPairs) {
           for (let i = 0; i < nextBirds.length; i += 1) {
@@ -1113,6 +1128,7 @@ export default function MapView({
         paint()
       },
     }
+    tweenRef.current.timeScale(propsRef.current.playSpeed || 1)
     paint()
   }
 
@@ -1186,6 +1202,7 @@ export default function MapView({
         drawTemperature({ step: TEMPERATURE.sampleStep })
       },
     })
+    tween.timeScale(propsRef.current.playSpeed || 1)
     tempPaintRef.current.tween = tween
   }
 
@@ -1371,6 +1388,13 @@ export default function MapView({
   }, [year, month, temperaturePack])
 
   useEffect(() => {
+    const scale = playSpeed || 1
+    tweenRef.current?.timeScale?.(scale)
+    extremeTweenRef.current?.timeScale?.(scale)
+    tempPaintRef.current.tween?.timeScale?.(scale)
+  }, [playSpeed])
+
+  useEffect(() => {
     if (playing) {
       tweenRef.current?.resume?.()
       extremeTweenRef.current?.resume?.()
@@ -1387,6 +1411,7 @@ export default function MapView({
     followArmedRef.current = false
     followEaseDoneRef.current = false
     followTargetRef.current = null
+    followBirdIndexRef.current = null
     const wasFollowing = followMoveRef.current
     followMoveRef.current = false
     const map = mapRef.current
