@@ -263,6 +263,7 @@
   border-radius: 23px;
   background: transparent;
   color: #111;
+  overflow: visible;
   transition:
     width 340ms ease,
     height 340ms ease,
@@ -271,6 +272,7 @@
 }
 
 .map-birdcast.is-open {
+  overflow: hidden;
   border-radius: 18px;
   background: #fff;
 }

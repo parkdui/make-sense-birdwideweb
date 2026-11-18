@@ -5,6 +5,7 @@ import SpeciesSelector from './components/SpeciesSelector.jsx'
 import Timeline, { PlayButton, PlaySpeed } from './components/Timeline.jsx'
 import { FLOCK, SPECIES_CATALOG, TEMPERATURE, TIMELINE } from './config.js'
 import { copyMode, overallCopy, speciesCopy } from './utils/migrationCopy.js'
+import { useGentleHover } from './hooks/useGentleHover.js'
 import { useSpeciesDatasets } from './hooks/useSpeciesDatasets.js'
 import { useTemperatureData } from './hooks/useTemperatureData.js'
 import {
@@ -81,6 +82,7 @@ function useTypewriter(text, active) {
 }
 
 function BirdCast({ open, disabled, text, bird, onToggle }) {
+  const toggleRef = useGentleHover(disabled)
   const shellRef = useRef(null)
   const innerRef = useRef(null)
   const closedSize = useRef({ w: 0, h: 0 })
@@ -203,6 +205,7 @@ function BirdCast({ open, disabled, text, bird, onToggle }) {
         <div className="map-birdcast__bar">
           <button
             type="button"
+            ref={toggleRef}
             className={`map-season map-birdcast__toggle${open ? ' is-on' : ''}`}
             aria-pressed={open}
             aria-expanded={open}
@@ -271,7 +274,7 @@ export default function App() {
   const [playSpeed, setPlaySpeed] = useState(1)
   const [summer, setSummer] = useState(false)
   const [winter, setWinter] = useState(false)
-  const [birdCast, setBirdCast] = useState(false)
+  const [birdCast, setBirdCast] = useState(true)
   const [showSplash, setShowSplash] = useState(true)
   /** Time already spent in the current month while playback was running. */
   const monthElapsedRef = useRef(0)
@@ -468,6 +471,8 @@ export default function App() {
   const errorMessage = errors.map((e) => e.error).filter(Boolean).join(' · ')
 
   const controlsDisabled = !ready && flockSpecs.length === 0
+  const summerHoverRef = useGentleHover(controlsDisabled)
+  const winterHoverRef = useGentleHover(controlsDisabled)
 
   return (
     <div className="app">
@@ -563,6 +568,7 @@ export default function App() {
         </div>
         <button
           type="button"
+            ref={summerHoverRef}
             className={`map-season${summer ? ' is-on' : ''}`}
             aria-pressed={summer}
             disabled={controlsDisabled}
@@ -572,6 +578,7 @@ export default function App() {
           </button>
           <button
             type="button"
+            ref={winterHoverRef}
             className={`map-season${winter ? ' is-on' : ''}`}
             aria-pressed={winter}
             disabled={controlsDisabled}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GBIF, SPECIES_CATALOG } from '../config.js'
+import { useGentleHover } from '../hooks/useGentleHover.js'
 import { useNorthernmost } from '../hooks/useNorthernmost.js'
 
 const COLOR_BY_ID = Object.fromEntries(
@@ -205,6 +206,7 @@ export const PLAY_SPEEDS = [0.5, 1, 1.5, 2]
 export function PlaySpeed({ speed, disabled, onChange }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
+  const buttonRef = useGentleHover(disabled)
 
   useEffect(() => {
     if (!open) return undefined
@@ -226,6 +228,7 @@ export function PlaySpeed({ speed, disabled, onChange }) {
     <div className="map-speed" ref={rootRef}>
       <button
         type="button"
+        ref={buttonRef}
         className="map-speed__button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -259,9 +262,11 @@ export function PlaySpeed({ speed, disabled, onChange }) {
 }
 
 export function PlayButton({ playing, disabled, onToggle }) {
+  const ref = useGentleHover(disabled)
   return (
     <button
       type="button"
+      ref={ref}
       className="map-play"
       onClick={onToggle}
       disabled={disabled}
