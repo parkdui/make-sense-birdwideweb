@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import MapView from './components/MapView.jsx'
+import Splash from './components/Splash.jsx'
 import SpeciesSelector from './components/SpeciesSelector.jsx'
 import Timeline, { PlayButton, PlaySpeed } from './components/Timeline.jsx'
 import { FLOCK, SPECIES_CATALOG, TEMPERATURE, TIMELINE } from './config.js'
+import { copyMode, overallCopy, speciesCopy } from './utils/migrationCopy.js'
 import { useSpeciesDatasets } from './hooks/useSpeciesDatasets.js'
 import { useTemperatureData } from './hooks/useTemperatureData.js'
 import {
@@ -48,6 +50,186 @@ function seasonMonths(summer, winter) {
   return months
 }
 
+const BIRDCAST_EXPAND_MS = 340
+
+function useTypewriter(text, active) {
+  const [shown, setShown] = useState('')
+
+  useEffect(() => {
+    if (!active) {
+      setShown('')
+      return undefined
+    }
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced || !text) {
+      setShown(text)
+      return undefined
+    }
+    let index = 0
+    setShown('')
+    const timer = window.setInterval(() => {
+      index += 1
+      setShown(text.slice(0, index))
+      if (index >= text.length) window.clearInterval(timer)
+    }, 16)
+    return () => window.clearInterval(timer)
+  }, [text, active])
+
+  return shown
+}
+
+function BirdCast({ open, disabled, text, bird, onToggle }) {
+  const shellRef = useRef(null)
+  const innerRef = useRef(null)
+  const closedSize = useRef({ w: 0, h: 0 })
+  const wasGrown = useRef(false)
+  const targetHRef = useRef(0)
+  const [grown, setGrown] = useState(false)
+  const [armed, setArmed] = useState(false)
+  const typed = useTypewriter(text, open && armed)
+
+  useEffect(() => {
+    if (!open) {
+      setGrown(false)
+      setArmed(false)
+      return undefined
+    }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced) {
+      setGrown(true)
+      setArmed(true)
+      return undefined
+    }
+    setGrown(true)
+    setArmed(false)
+    return undefined
+  }, [open])
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current
+    const inner = innerRef.current
+    if (!shell || !inner) return undefined
+
+    if (!grown) {
+      inner.style.width = ''
+      shell.style.width = ''
+      shell.style.height = ''
+      closedSize.current = { w: shell.offsetWidth, h: shell.offsetHeight }
+      wasGrown.current = false
+      return undefined
+    }
+
+    const parent = shell.parentElement?.clientWidth ?? 460
+    const targetW = Math.min(460, Math.max(closedSize.current.w, parent - 32))
+    shell.style.transition = 'none'
+    inner.style.width = `${targetW}px`
+    shell.style.width = `${targetW}px`
+    shell.style.height = 'auto'
+
+    const maxH = Math.max(
+      closedSize.current.h,
+      (shell.parentElement?.clientHeight ?? targetW) - 32,
+    )
+    const fullH = Math.min(shell.offsetHeight, maxH)
+    targetHRef.current = fullH
+
+    if (wasGrown.current) {
+      const locked = shell.getBoundingClientRect().height
+      shell.style.height = `${locked}px`
+      shell.offsetHeight
+      shell.style.transition = ''
+      const frame = window.requestAnimationFrame(() => {
+        shell.style.height = `${fullH}px`
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    wasGrown.current = true
+    shell.style.width = `${closedSize.current.w}px`
+    shell.style.height = `${closedSize.current.h}px`
+    shell.offsetHeight
+    shell.style.transition = ''
+    let played = false
+    const frame = window.requestAnimationFrame(() => {
+      played = true
+      shell.style.width = `${targetW}px`
+      shell.style.height = `${fullH}px`
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      if (!played) wasGrown.current = false
+    }
+  }, [grown, text, bird])
+
+  useEffect(() => {
+    if (!open || !grown) return undefined
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setArmed(true)
+      return undefined
+    }
+    const shell = shellRef.current
+    if (!shell) return undefined
+    let settled = false
+    const finish = () => {
+      if (settled || !shellRef.current) return
+      const height = shellRef.current.getBoundingClientRect().height
+      const goal = targetHRef.current
+      if (goal > 0 && height < goal - 2) return
+      settled = true
+      setArmed(true)
+    }
+    const onEnd = (event) => {
+      if (event.target === shell && event.propertyName === 'height') finish()
+    }
+    shell.addEventListener('transitionend', onEnd)
+    const poll = window.setInterval(finish, 40)
+    const giveUp = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      setArmed(true)
+    }, 800)
+    return () => {
+      shell.removeEventListener('transitionend', onEnd)
+      window.clearInterval(poll)
+      window.clearTimeout(giveUp)
+    }
+  }, [open, grown])
+
+  return (
+    <div className={`map-birdcast${grown ? ' is-open' : ''}`} ref={shellRef}>
+      <div className="map-birdcast__inner" ref={innerRef}>
+        <div className="map-birdcast__bar">
+          <button
+            type="button"
+            className={`map-season map-birdcast__toggle${open ? ' is-on' : ''}`}
+            aria-pressed={open}
+            aria-expanded={open}
+            disabled={disabled}
+            onClick={onToggle}
+          >
+            bird-cast
+          </button>
+          {grown && bird && (
+            <div className="map-birdcast__name" style={{ backgroundColor: bird.color }}>
+              {bird.commonName}
+            </div>
+          )}
+        </div>
+        <div className="map-birdcast__body">
+          <p className="map-birdcast__text">
+            <span className="map-birdcast__typed">{typed}</span>
+            <span className="map-birdcast__reserve" aria-hidden="true">
+              {text}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [selectedIds, setSelectedIds] = useState(DEFAULT_SELECTED)
   const [followId, setFollowId] = useState(null)
@@ -89,6 +271,8 @@ export default function App() {
   const [playSpeed, setPlaySpeed] = useState(1)
   const [summer, setSummer] = useState(false)
   const [winter, setWinter] = useState(false)
+  const [birdCast, setBirdCast] = useState(false)
+  const [showSplash, setShowSplash] = useState(true)
   /** Time already spent in the current month while playback was running. */
   const monthElapsedRef = useRef(0)
   /** Year step requested by a season filter, so the year change keeps that month. */
@@ -120,6 +304,14 @@ export default function App() {
 
   const activeYear = year ?? availableYears[0] ?? 2000
   const focusMonths = seasonMonths(summer, winter)
+  const mode = copyMode(summer, winter)
+  const overall = useMemo(() => overallCopy(activeYear), [activeYear])
+  const castText = followId
+    ? speciesCopy(followId, activeYear, mode)
+    : [overall.temperature, overall.migration].filter(Boolean).join(' ')
+  const followedBird = followId
+    ? SPECIES_CATALOG.find((species) => species.id === followId) ?? null
+    : null
   const yearsRef = useRef(availableYears)
   yearsRef.current = availableYears
 
@@ -279,6 +471,7 @@ export default function App() {
 
   return (
     <div className="app">
+      {showSplash && <Splash onDone={() => setShowSplash(false)} />}
       <aside className="side">
         <div className="side__brand">
           <img
@@ -305,6 +498,7 @@ export default function App() {
         </a>
       </aside>
 
+      <div className="stage">
       <div className="map-slot">
         <MapView
           flocks={mapFlocks}
@@ -366,9 +560,9 @@ export default function App() {
           />
           <div className="map-time">
             {TIMELINE.months[month - 1] ?? ''} {activeYear}
-          </div>
-          <button
-            type="button"
+        </div>
+        <button
+          type="button"
             className={`map-season${summer ? ' is-on' : ''}`}
             aria-pressed={summer}
             disabled={controlsDisabled}
@@ -384,10 +578,18 @@ export default function App() {
             onClick={() => setWinter((value) => !value)}
           >
             Winter
-          </button>
+        </button>
         </div>
+        <BirdCast
+          open={birdCast}
+          disabled={controlsDisabled}
+          text={castText}
+          bird={followedBird}
+          onToggle={() => setBirdCast((value) => !value)}
+        />
       </div>
 
+      <div className="bottom-dock">
       <div className="year-dock">
         <Timeline
           year={activeYear}
@@ -398,6 +600,8 @@ export default function App() {
           focusMonths={focusMonths}
           disabled={controlsDisabled}
         />
+      </div>
+      </div>
       </div>
 
       {loading && (

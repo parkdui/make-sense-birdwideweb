@@ -96,14 +96,10 @@ export const TEMPERATURE = {
   paintAlpha: 0.72,
   /** Absolute air-temperature color scale (°C). Shared by the legend and the map. */
   vmin: -20,
-  vmax: 38,
+  vmax: 40,
   colorStops: [
-    { t: -20, color: '#e8e8e8' },
-    { t: 0, color: '#e7e7ab' },
-    { t: 10, color: '#dfbf32' },
-    { t: 20, color: '#ea7c7c' },
-    { t: 28, color: '#a25856' },
-    { t: 38, color: '#8e5757' },
+    { t: -20, color: '#f2f2f2' },
+    { t: 40, color: '#311d1d' },
   ],
   /** Viewport sample step (CSS px) when the map is still. */
   sampleStep: 2,
@@ -175,7 +171,7 @@ export const MAP = {
   southLineColor: 'rgba(8, 120, 110, 0.92)',
   extremeLineWidth: 2,
   /** Dim mask north of N / south of S so attention stays between the lines. */
-  extremeBandDim: 'rgba(12, 14, 18, 0.1)',
+  extremeBandDim: 'rgba(12, 14, 18, 0.04)',
 }
 
 export const FLOCK = {

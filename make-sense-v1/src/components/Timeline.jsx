@@ -70,8 +70,62 @@ function NorthernDots({
     return out
   }, [pack, selectedIds, year, month, first, span, domain, focusMonths])
 
+  const series = useMemo(() => {
+    if (!pack?.species) return []
+    const selected = new Set(selectedIds)
+    const out = []
+    for (const species of pack.species) {
+      if (!selected.has(species.id)) continue
+      const color = COLOR_BY_ID[species.id]
+      if (!color) continue
+      const points = []
+      const years = [...(species.years ?? [])].sort((a, b) => a.year - b.year)
+      for (const block of years) {
+        const months = [...(block.months ?? [])].sort((a, b) => a.month - b.month)
+        for (const entry of months) {
+          const lat = entry.coordinate?.decimalLatitude
+          if (!Number.isFinite(lat)) continue
+          const t = (block.year - first + (entry.month - 0.5) / 12) / span
+          const north = (lat - domain.min) / (domain.max - domain.min)
+          points.push({
+            x: Math.min(100, Math.max(0, t * 100)),
+            y: Math.min(100, Math.max(0, (1 - north) * 100)),
+            quiet: Array.isArray(focusMonths) && !focusMonths.includes(entry.month),
+          })
+        }
+      }
+      if (points.length > 1) out.push({ id: species.id, color, points })
+    }
+    return out
+  }, [pack, selectedIds, first, span, domain, focusMonths])
+
   return (
     <div className="timeline__dots" aria-hidden="true">
+      <svg
+        className="timeline__lines"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+      >
+        {series.map((line) =>
+          line.points.slice(1).map((point, index) => {
+            const prev = line.points[index]
+            const quiet = prev.quiet || point.quiet
+            return (
+              <line
+                key={`${line.id}-${index}`}
+                x1={prev.x}
+                y1={prev.y}
+                x2={point.x}
+                y2={point.y}
+                stroke={line.color}
+                strokeOpacity={quiet ? 0.18 : 0.9}
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            )
+          }),
+        )}
+      </svg>
       {dots.map((dot) => (
         <span
           key={dot.key}
@@ -113,7 +167,10 @@ export default function Timeline({
   return (
     <section className="timeline" aria-label="Year timeline">
       <div className="timeline__year-row">
-        <span className="timeline__year-end">{first}</span>
+        <div className="timeline__year-start">
+          <span className="timeline__lat-index">Latitude N</span>
+          <span className="timeline__year-end">{first}</span>
+        </div>
         <div className="timeline__plot">
           <NorthernDots
             pack={northernmost}

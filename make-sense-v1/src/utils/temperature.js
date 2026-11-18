@@ -20,7 +20,7 @@ function hexToRgb(hex) {
  */
 export function absoluteToRgba(
   tempC,
-  { vmin = -20, vmax = 38, alpha = 0.55 } = {},
+  { vmin = -20, vmax = 40, alpha = 0.55 } = {},
 ) {
   if (!Number.isFinite(tempC)) return [0, 0, 0, 0]
 
