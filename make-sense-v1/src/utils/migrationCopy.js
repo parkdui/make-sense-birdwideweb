@@ -201,3 +201,94 @@ export function copyMode(summer, winter) {
   if (winter && !summer) return 'winter'
   return 'general'
 }
+
+function monthMedian(records, year, month) {
+  const lats = []
+  for (const record of records) {
+    if (record.year !== year || record.month !== month) continue
+    if (!Number.isFinite(record.decimalLatitude)) continue
+    lats.push(record.decimalLatitude)
+  }
+  if (!lats.length) return null
+  lats.sort((a, b) => a - b)
+  return lats[Math.floor((lats.length - 1) / 2)]
+}
+
+function temperatureLine(year, furtherNorth) {
+  const now = brief.temperature[String(year)]
+  const previous = brief.temperature[String(year - 1)]
+  if (!Number.isFinite(now)) return ''
+  if (!Number.isFinite(previous)) {
+    return now >= 0
+      ? "It's warmer than the 1951–1980 average."
+      : "It's cooler than the 1951–1980 average."
+  }
+  const delta = now - previous
+  if (Math.abs(delta) < 0.015) return 'The temperature is about the same as last year.'
+  if (delta > 0 && furtherNorth) return 'This area is warmer than before.'
+  if (delta > 0) return "It's getting warmer."
+  return "It's cooler than last year."
+}
+
+function seasonLine(month, heading, shift, breeding) {
+  const spring = month >= 2 && month <= 6
+  const autumn = month >= 8 && month <= 12
+  if (heading === 'north' && spring) return "I'm heading north to breed."
+  if (heading === 'south' && autumn) return "I'm heading south to winter."
+  if (heading === 'north') return "I'm heading further north."
+  if (heading === 'south') return "I'm heading further south."
+  if (month >= 3 && month <= 4 && !breeding) return 'Breeding season is starting.'
+  if (month >= 9 && month <= 11 && breeding) return "I'm still on the breeding grounds."
+  if (breeding) {
+    if (shift === 'north') return "I'm breeding further north than last year."
+    if (shift === 'south') return "I'm breeding further south than last year."
+    return "I'm here to breed."
+  }
+  if (shift === 'north') return "I'm wintering further north than last year."
+  if (shift === 'south') return "I'm wintering further south than last year."
+  return "I'm wintering here."
+}
+
+/**
+ * Short first-person line for the bird currently being followed.
+ * Direction comes from this month's sightings against the previous month.
+ * Warmth comes from the year's temperature against the year before.
+ */
+export function followSpeech(id, year, month, records) {
+  const species = brief.species.find((item) => item.id === id)
+  if (!species || !records?.length || !Number.isFinite(year) || !Number.isFinite(month)) {
+    return ''
+  }
+
+  const here = monthMedian(records, year, month)
+  const previousMonth = month > 1 ? month - 1 : 12
+  const previousYearForMonth = month > 1 ? year : year - 1
+  const before = monthMedian(records, previousYearForMonth, previousMonth)
+  const lastYear = monthMedian(records, year - 1, month)
+
+  let heading = 'hold'
+  if (here != null && before != null) {
+    const delta = here - before
+    if (delta >= 5) heading = 'north'
+    else if (delta <= -5) heading = 'south'
+  }
+
+  let shift = 'same'
+  if (here != null && lastYear != null) {
+    const delta = here - lastYear
+    if (delta >= 2) shift = 'north'
+    else if (delta <= -2) shift = 'south'
+  }
+
+  const row = species.years[String(year)]
+  let breeding = month >= 5 && month <= 8
+  if (month === 12 || month <= 2) breeding = false
+  else if (month >= 6 && month <= 8) breeding = true
+  else if (here != null && row?.summer && row?.winter) {
+    breeding = Math.abs(here - row.summer.med) <= Math.abs(here - row.winter.med)
+  }
+
+  const season = seasonLine(month, heading, shift, breeding)
+  const temperature = temperatureLine(year, shift === 'north')
+  return [season, temperature].filter(Boolean).join(' ')
+}

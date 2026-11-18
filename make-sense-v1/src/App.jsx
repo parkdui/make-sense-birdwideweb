@@ -4,7 +4,7 @@ import Splash from './components/Splash.jsx'
 import SpeciesSelector from './components/SpeciesSelector.jsx'
 import Timeline, { PlayButton, PlaySpeed } from './components/Timeline.jsx'
 import { FLOCK, SPECIES_CATALOG, TEMPERATURE, TIMELINE } from './config.js'
-import { copyMode, overallCopy, speciesCopy } from './utils/migrationCopy.js'
+import { copyMode, followSpeech, overallCopy, speciesCopy } from './utils/migrationCopy.js'
 import { useGentleHover } from './hooks/useGentleHover.js'
 import { useSpeciesDatasets } from './hooks/useSpeciesDatasets.js'
 import { useTemperatureData } from './hooks/useTemperatureData.js'
@@ -467,6 +467,12 @@ export default function App() {
     [flockSpecs],
   )
 
+  const followLine = useMemo(() => {
+    if (!followId) return ''
+    const spec = flockSpecs.find((flock) => flock.id === followId)
+    return followSpeech(followId, activeYear, month, spec?.records)
+  }, [followId, activeYear, month, flockSpecs])
+
   const status = loading ? 'loading' : ready ? 'ready' : errors.length ? 'error' : 'idle'
   const errorMessage = errors.map((e) => e.error).filter(Boolean).join(' · ')
 
@@ -513,6 +519,7 @@ export default function App() {
           playSpeed={playSpeed}
           seasonGlide={seasonGlideRef.current}
           followId={followId}
+          followSpeech={followLine}
           temperaturePack={temperaturePack}
         />
         <div className="map-controls">

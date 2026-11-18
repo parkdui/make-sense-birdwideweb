@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import gsap from 'gsap'
 import * as maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -285,6 +286,7 @@ export default function MapView({
   playSpeed = 1,
   seasonGlide = false,
   followId = null,
+  followSpeech = '',
   temperaturePack,
 }) {
   const containerRef = useRef(null)
@@ -314,6 +316,8 @@ export default function MapView({
   const followTargetRef = useRef(null)
   /** Index of the single bird the camera stays on. */
   const followBirdIndexRef = useRef(null)
+  const bubbleRef = useRef(null)
+  const [bubbleRoot, setBubbleRoot] = useState(null)
   const followSinceRef = useRef(0)
   const followTempAtRef = useRef(0)
   const tempPaintRef = useRef({
@@ -350,6 +354,10 @@ export default function MapView({
     followId,
     temperaturePack,
   }
+
+  useEffect(() => {
+    setBubbleRoot(containerRef.current?.closest('.map-slot') ?? null)
+  }, [])
 
   const allBirds = () => {
     const out = []
@@ -665,6 +673,42 @@ export default function MapView({
     }
 
     trackFollowCamera()
+    placeFollowBubble(width, height)
+  }
+
+  const placeFollowBubble = (width, height) => {
+    const el = bubbleRef.current
+    const map = mapRef.current
+    if (!el || !map) return
+    const id = propsRef.current.followId
+    const bird = id ? followBird(id) : null
+    if (!bird) {
+      el.style.visibility = 'hidden'
+      return
+    }
+    const point = map.project([bird.lng, bird.lat])
+    const margin = 12
+    const gap = 28
+    const bubbleW = el.offsetWidth
+    const bubbleH = el.offsetHeight
+    let left = point.x - 28
+    let top = point.y - gap - bubbleH
+    let tail = 'up'
+    if (top < margin) {
+      top = point.y + gap
+      tail = 'down'
+    }
+    if (left < margin) left = margin
+    if (left + bubbleW > width - margin) {
+      left = Math.max(margin, width - margin - bubbleW)
+    }
+    if (top + bubbleH > height - margin) {
+      top = Math.max(margin, height - margin - bubbleH)
+    }
+    el.dataset.tail = tail
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
+    el.style.visibility = 'visible'
   }
 
   const drawSceneRef = useRef(drawScene)
@@ -1439,6 +1483,18 @@ export default function MapView({
       <canvas ref={canvasRef} className="trail-canvas" aria-hidden="true" />
       <canvas ref={birdCanvasRef} className="bird-canvas" aria-hidden="true" />
       <canvas ref={dimCanvasRef} className="dim-canvas" aria-hidden="true" />
+      {bubbleRoot &&
+        createPortal(
+          <div
+            ref={bubbleRef}
+            className={`follow-bubble${followSpeech ? ' is-on' : ''}`}
+            data-tail="up"
+            role="status"
+          >
+            <p>{followSpeech}</p>
+          </div>,
+          bubbleRoot,
+        )}
     </div>
   )
 }

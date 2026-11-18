@@ -84,6 +84,53 @@
   inset: 0;
 }
 
+.follow-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 6;
+  max-width: 230px;
+  padding: 12px 14px 13px;
+  border-radius: 16px;
+  background: #e6dada;
+  color: #311d1d;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.follow-bubble.is-on {
+  opacity: 1;
+}
+
+.follow-bubble p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
+.follow-bubble::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  width: 14px;
+  height: 14px;
+  background: #e6dada;
+  transform: rotate(45deg);
+}
+
+.follow-bubble[data-tail='up']::after {
+  bottom: -6px;
+}
+
+.follow-bubble[data-tail='down']::after {
+  top: -6px;
+}
+
 .map-controls {
   position: absolute;
   top: 16px;
