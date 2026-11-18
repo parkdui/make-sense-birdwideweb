@@ -1,5 +1,54 @@
 import { useState } from 'react'
 import { SPECIES_CATALOG } from '../config.js'
+import { useNorthernmost } from '../hooks/useNorthernmost.js'
+
+const SUMMER_MONTHS = new Set([7, 8])
+const WINTER_MONTHS = new Set([1, 12])
+
+function seasonNorth(yearBlock, months) {
+  let max = -Infinity
+  for (const entry of yearBlock?.months ?? []) {
+    if (!months.has(entry.month)) continue
+    const lat = entry.coordinate?.decimalLatitude
+    if (Number.isFinite(lat) && lat > max) max = lat
+  }
+  return Number.isFinite(max) ? max : null
+}
+
+function degreeShift(pack, speciesId, months) {
+  const species = pack?.species?.find((item) => item.id === speciesId)
+  if (!species) return null
+  const early = species.years?.find((item) => item.year === 2000)
+  const late = species.years?.find((item) => item.year === 2025)
+  const from = seasonNorth(early, months)
+  const to = seasonNorth(late, months)
+  if (from == null || to == null) return null
+  return Math.round(to - from)
+}
+
+function ReachArrow({ up }) {
+  return (
+    <svg viewBox="0 0 12 20" aria-hidden="true">
+      {up ? (
+        <path d="M6 18V4M2.2 7.2 6 3.2l3.8 4" />
+      ) : (
+        <path d="M6 2v14M2.2 12.8 6 16.8l3.8-4" />
+      )}
+    </svg>
+  )
+}
+
+function ReachShift({ value }) {
+  if (value == null) return <span className="bird-card__reach-shift">—</span>
+  if (value === 0) return <span className="bird-card__reach-shift">0°</span>
+  const north = value > 0
+  return (
+    <span className="bird-card__reach-shift">
+      {north ? 'N' : 'S'} {Math.abs(value)}°
+      <ReachArrow up={north} />
+    </span>
+  )
+}
 
 function CheckMark({ on, color }) {
   return (
@@ -36,7 +85,10 @@ export default function SpeciesSelector({
   onFollowToggle,
   disabled = false,
 }) {
-  const [expandedIds, setExpandedIds] = useState(() => [SPECIES_CATALOG[0].id])
+  const [expandedIds, setExpandedIds] = useState(() =>
+    SPECIES_CATALOG.map((species) => species.id),
+  )
+  const northernmost = useNorthernmost()
 
   const expand = (id) => {
     setExpandedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
@@ -110,6 +162,25 @@ export default function SpeciesSelector({
               {species.blurb && (
                 <p className="bird-card__blurb">{species.blurb}</p>
               )}
+              <div className="bird-card__reach">
+                <p>Compared to 2000 we reached...</p>
+                <div className="bird-card__reach-row">
+                  <span className="bird-card__reach-pair">
+                    <span className="bird-card__reach-season">
+                      <img src="/icon_summer.svg" alt="" />
+                      Summer
+                    </span>
+                    <ReachShift value={degreeShift(northernmost, species.id, SUMMER_MONTHS)} />
+                  </span>
+                  <span className="bird-card__reach-pair">
+                    <span className="bird-card__reach-season">
+                      <img src="/icon_winter.svg" alt="" />
+                      Winter
+                    </span>
+                    <ReachShift value={degreeShift(northernmost, species.id, WINTER_MONTHS)} />
+                  </span>
+                </div>
+              </div>
             </article>
           )
         }
