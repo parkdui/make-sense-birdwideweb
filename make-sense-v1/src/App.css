@@ -1306,18 +1306,8 @@
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: #6b6b6b;
+  background: #311d1d;
   overflow: hidden;
-}
-
-.splash__band {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  z-index: 1;
-  background: #6b6b6b;
-  transform: scaleY(3.6);
-  transform-origin: center center;
 }
 
 .splash__birds {
@@ -1334,6 +1324,7 @@
   left: 50%;
   top: 46%;
   z-index: 3;
+  width: max-content;
   translate: -50% -50%;
   pointer-events: none;
 }
@@ -1349,8 +1340,16 @@
   white-space: nowrap;
 }
 
-.splash__w {
+.splash__line--web {
+  margin-left: 19%;
+}
+
+.splash__w,
+.splash__rest {
   display: inline-block;
+}
+
+.splash__w {
   transform-origin: 0% 58%;
 }
 

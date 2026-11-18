@@ -2,20 +2,10 @@ import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import * as THREE from 'three'
 
-const BANDS = [
-  { top: '16%', height: '7.2%', color: '#8a8a8a' },
-  { top: '23.2%', height: '6.4%', color: '#a3a3a3' },
-  { top: '29.6%', height: '6%', color: '#c0c0c0' },
-  { top: '35.6%', height: '8.4%', color: '#f1f1f1' },
-  { top: '44%', height: '6%', color: '#d2d2d2' },
-  { top: '50%', height: '6.4%', color: '#b0b0b0' },
-  { top: '56.4%', height: '7.2%', color: '#909090' },
-]
-
 const BIRD_COUNT = 96
 const NEIGHBOR = 180
-const MAX_SPEED = 4.2
-const MAX_FORCE = 0.1
+const MAX_SPEED = 1.15
+const MAX_FORCE = 0.035
 const FAR = new THREE.Vector3(1600, 260, -700)
 
 // Classic three.js bird (mrdoob / the CodePen flock): nose on +X, wings on Z.
@@ -86,7 +76,7 @@ function createSplashFlock(canvas) {
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
-      uColor: { value: new THREE.Color('#141414') },
+      uColor: { value: new THREE.Color('#f3efe9') },
       uOpacity: { value: 1 },
     },
     vertexShader: VERTEX,
@@ -109,12 +99,12 @@ function createSplashFlock(canvas) {
         Math.random() * 460 - 230,
       ),
       velocity: new THREE.Vector3(
-        Math.random() * 2 - 1,
-        Math.random() * 2 - 1,
-        Math.random() * 2 - 1,
+        Math.random() * 0.5 - 0.25,
+        Math.random() * 0.5 - 0.25,
+        Math.random() * 0.5 - 0.25,
       ),
       acceleration: new THREE.Vector3(),
-      scale: 1.8 + Math.random() * 0.7,
+      scale: 0.42 + Math.random() * 0.22,
     })
   }
 
@@ -171,7 +161,7 @@ function createSplashFlock(canvas) {
         cohereCount += 1
       }
       bird.acceleration.set(0, 0, 0)
-      toFar.copy(FAR).sub(bird.position).multiplyScalar(0.004 * depart.pull)
+      toFar.copy(FAR).sub(bird.position).multiplyScalar(0.0014 * depart.pull)
       bird.acceleration.add(toFar)
       if (alignCount > 0) {
         ali.multiplyScalar(1 / alignCount)
@@ -189,7 +179,7 @@ function createSplashFlock(canvas) {
       const speed = Math.max(bird.velocity.length(), 0.001)
       const yaw = Math.atan2(-bird.velocity.z, bird.velocity.x)
       const pitch = Math.asin(THREE.MathUtils.clamp(bird.velocity.y / speed, -1, 1))
-      phases[i] = (phases[i] + Math.max(0, pitch) + 0.1) % 62.83
+      phases[i] = (phases[i] + Math.max(0, pitch) + 0.045) % 62.83
       dummy.position.copy(bird.position)
       dummy.rotation.set(0, yaw, pitch)
       dummy.scale.setScalar(bird.scale)
@@ -227,9 +217,11 @@ function createSplashFlock(canvas) {
 export default function Splash({ onDone }) {
   const rootRef = useRef(null)
   const canvasRef = useRef(null)
-  const bandRefs = useRef([])
   const wideWRef = useRef(null)
+  const wideRestRef = useRef(null)
   const webWRef = useRef(null)
+  const webRestRef = useRef(null)
+  const callRef = useRef(null)
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
 
@@ -249,35 +241,48 @@ export default function Splash({ onDone }) {
     }
 
     const flock = createSplashFlock(canvas)
-    const bands = bandRefs.current.filter(Boolean)
-    gsap.set([wideWRef.current, webWRef.current], {
-      scaleX: 1,
-      marginRight: 0,
-      transformOrigin: '0% 58%',
-    })
 
+    const followLine = 'Following a flock of birds...'
+    const typed = { count: 0 }
     const birdFade = { value: 1 }
+    const wideGrow = { scale: 1 }
+    const webGrow = { scale: 1 }
     const tl = gsap.timeline({
       onComplete: () => onDoneRef.current(),
     })
 
-    const center = (bands.length - 1) / 2
-    bands.forEach((band, index) => {
+    const widen = (state, letter, rest, at) => {
       tl.to(
-        band,
+        state,
         {
-          scaleY: 1,
-          backgroundColor: BANDS[index].color,
-          duration: 1.7,
+          scale: 1.9,
+          duration: 1.2,
           ease: 'power2.inOut',
+          onUpdate: () => {
+            letter.style.transform = `scaleX(${state.scale})`
+            const extra = (state.scale - 1) * letter.offsetWidth
+            rest.style.transform = `translateX(${extra}px)`
+          },
         },
-        0.2 + Math.abs(index - center) * 0.07,
+        at,
       )
-    })
-
-    const widen = { scaleX: 1.9, marginRight: '0.48em', duration: 1.2, ease: 'power2.inOut' }
-    tl.to(wideWRef.current, widen, 0.55)
-    tl.to(webWRef.current, { ...widen }, 1.85)
+    }
+    widen(wideGrow, wideWRef.current, wideRestRef.current, 0.55)
+    widen(webGrow, webWRef.current, webRestRef.current, 1.85)
+    tl.to(
+      typed,
+      {
+        count: followLine.length,
+        duration: 2.1,
+        ease: 'none',
+        onUpdate: () => {
+          if (callRef.current) {
+            callRef.current.textContent = followLine.slice(0, Math.round(typed.count))
+          }
+        },
+      },
+      0.35,
+    )
     tl.to(
       birdFade,
       {
@@ -298,33 +303,27 @@ export default function Splash({ onDone }) {
 
   return (
     <div className="splash" ref={rootRef} aria-hidden="true">
-      {BANDS.map((band, index) => (
-        <div
-          key={band.top}
-          className="splash__band"
-          ref={(node) => {
-            bandRefs.current[index] = node
-          }}
-          style={{ top: band.top, height: band.height }}
-        />
-      ))}
       <canvas className="splash__birds" ref={canvasRef} />
       <div className="splash__logo">
         <div className="splash__line">
           Bird
-          <span className="splash__call">Calling birds...</span>
+          <span className="splash__call" ref={callRef} />
         </div>
         <div className="splash__line">
           <span className="splash__w" ref={wideWRef}>
             W
           </span>
-          ide
+          <span className="splash__rest" ref={wideRestRef}>
+            ide
+          </span>
         </div>
-        <div className="splash__line">
+        <div className="splash__line splash__line--web">
           <span className="splash__w" ref={webWRef}>
             W
           </span>
-          eb
+          <span className="splash__rest" ref={webRestRef}>
+            eb
+          </span>
         </div>
       </div>
     </div>
