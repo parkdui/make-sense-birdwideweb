@@ -214,45 +214,124 @@ function monthMedian(records, year, month) {
   return lats[Math.floor((lats.length - 1) / 2)]
 }
 
+/** Months each species is on the move or settled. Overlaps are real. */
+const SEASONS = {
+  'barn-swallow': {
+    spring: [2, 3, 4, 5],
+    breed: [4, 5, 6, 7, 8],
+    autumn: [8, 9, 10],
+    winter: [9, 10, 11, 12, 1, 2],
+  },
+  'european-bee-eater': {
+    spring: [3, 4],
+    breed: [5, 6, 7],
+    autumn: [8, 9],
+    // Southern African birds can stay through spring. March–May stays winter
+    // only when the sightings are still in the south.
+    winter: [11, 12, 1, 2],
+    lateWinter: [3, 4, 5],
+  },
+  'common-crane': {
+    spring: [2, 3, 4],
+    breed: [5, 6, 7, 8],
+    autumn: [9, 10],
+    winter: [11, 12, 1, 2],
+  },
+  'eurasian-blackcap': {
+    spring: [3, 4, 5],
+    breed: [5, 6, 7, 8],
+    autumn: [8, 9, 10, 11],
+    winter: [11, 12, 1, 2],
+  },
+  'blackpoll-warbler': {
+    spring: [4, 5],
+    breed: [5, 6, 7, 8],
+    autumn: [9, 10],
+    winter: [11, 12, 1, 2, 3],
+  },
+}
+
+function has(months, month) {
+  return months?.includes(month) ?? false
+}
+
+/** 'north' when this month's sightings sit nearer the summer center. */
+function grounds(here, row) {
+  if (here == null || !row?.summer || !row?.winter) return null
+  const south = Math.abs(here - row.winter.med)
+  const north = Math.abs(here - row.summer.med)
+  if (Math.abs(south - north) < 3) return null
+  return south < north ? 'south' : 'north'
+}
+
+function phaseFor(id, month, heading, here, row) {
+  const calendar = SEASONS[id]
+  if (!calendar) return 'breed'
+  const spring = has(calendar.spring, month)
+  const breed = has(calendar.breed, month)
+  const autumn = has(calendar.autumn, month)
+  const winter = has(calendar.winter, month)
+  const place = grounds(here, row)
+
+  if (has(calendar.lateWinter, month) && place === 'south' && heading !== 'north') {
+    return 'winter'
+  }
+  if (heading === 'north' && spring) return 'spring'
+  if (heading === 'south' && autumn) return 'autumn'
+  if (breed && place !== 'south' && !(heading === 'south' && autumn)) return 'breed'
+  if (autumn && winter && place == null) {
+    if (heading === 'south' || month <= 10) return 'autumn'
+    return 'winter'
+  }
+  if (autumn && place !== 'south') return 'autumn'
+  if (winter && place !== 'north') return 'winter'
+  if (spring) return 'spring'
+  if (autumn) return 'autumn'
+  if (breed) return 'breed'
+  return 'winter'
+}
+
 function temperatureLine(year, furtherNorth) {
   const now = brief.temperature[String(year)]
   const previous = brief.temperature[String(year - 1)]
   if (!Number.isFinite(now)) return ''
   if (!Number.isFinite(previous)) {
-    return now >= 0
-      ? "It's warmer than the 1951–1980 average."
-      : "It's cooler than the 1951–1980 average."
+    return now >= 0 ? 'Warmer than the old average.' : 'Cooler than the old average.'
   }
   const delta = now - previous
-  if (Math.abs(delta) < 0.015) return 'The temperature is about the same as last year.'
-  if (delta > 0 && furtherNorth) return 'This area is warmer than before.'
-  if (delta > 0) return "It's getting warmer."
-  return "It's cooler than last year."
+  if (Math.abs(delta) < 0.015) return 'Same warmth as last year.'
+  if (delta > 0 && furtherNorth) return 'Warmer than before.'
+  if (delta > 0) return 'Getting warmer.'
+  return 'Cooler than last year.'
 }
 
-function seasonLine(month, heading, shift, breeding) {
-  const spring = month >= 2 && month <= 6
-  const autumn = month >= 8 && month <= 12
-  if (heading === 'north' && spring) return "I'm heading north to breed."
-  if (heading === 'south' && autumn) return "I'm heading south to winter."
-  if (heading === 'north') return "I'm heading further north."
-  if (heading === 'south') return "I'm heading further south."
-  if (month >= 3 && month <= 4 && !breeding) return 'Breeding season is starting.'
-  if (month >= 9 && month <= 11 && breeding) return "I'm still on the breeding grounds."
-  if (breeding) {
-    if (shift === 'north') return "I'm breeding further north than last year."
-    if (shift === 'south') return "I'm breeding further south than last year."
+function seasonLine(phase, heading, shift) {
+  if (phase === 'spring') {
+    if (heading === 'north') return "I'm heading north to breed."
+    if (heading === 'south') return "I'm still moving south."
+    return "I'm on the spring flight."
+  }
+  if (phase === 'breed') {
+    if (heading === 'north') return "I'm heading further north."
+    if (heading === 'south') return "I'm heading further south."
+    if (shift === 'north') return "I'm breeding further north."
+    if (shift === 'south') return "I'm breeding further south."
     return "I'm here to breed."
   }
-  if (shift === 'north') return "I'm wintering further north than last year."
-  if (shift === 'south') return "I'm wintering further south than last year."
+  if (phase === 'autumn') {
+    if (heading === 'south') return "I'm heading south to winter."
+    if (heading === 'north') return "I'm heading further north."
+    return "I'm on the autumn flight."
+  }
+  if (heading === 'north' || shift === 'north') return "I'm wintering further north."
+  if (heading === 'south' || shift === 'south') return "I'm wintering further south."
   return "I'm wintering here."
 }
 
 /**
  * Short first-person line for the bird currently being followed.
- * Direction comes from this month's sightings against the previous month.
- * Warmth comes from the year's temperature against the year before.
+ * The season comes from that species' calendar, then the month's sightings.
+ * Warmth comes from this year against the year before.
  */
 export function followSpeech(id, year, month, records) {
   const species = brief.species.find((item) => item.id === id)
@@ -281,14 +360,8 @@ export function followSpeech(id, year, month, records) {
   }
 
   const row = species.years[String(year)]
-  let breeding = month >= 5 && month <= 8
-  if (month === 12 || month <= 2) breeding = false
-  else if (month >= 6 && month <= 8) breeding = true
-  else if (here != null && row?.summer && row?.winter) {
-    breeding = Math.abs(here - row.summer.med) <= Math.abs(here - row.winter.med)
-  }
-
-  const season = seasonLine(month, heading, shift, breeding)
+  const phase = phaseFor(id, month, heading, here, row)
+  const season = seasonLine(phase, heading, shift)
   const temperature = temperatureLine(year, shift === 'north')
   return [season, temperature].filter(Boolean).join(' ')
 }
