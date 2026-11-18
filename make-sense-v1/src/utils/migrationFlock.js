@@ -37,6 +37,63 @@ function expandPositions(pool, flockSize) {
 }
 
 /**
+ * Arrange birds into one or more V formations (Common Crane style).
+ * Tip points roughly south / SSW; arms trail behind.
+ * Offsets are in degrees so the V reads at continental zoom.
+ */
+function expandAsVFormation(pool, flockSize) {
+  if (!pool.length || flockSize <= 0) return []
+
+  const birdsPerV =
+    flockSize <= 7
+      ? flockSize
+      : Math.min(11, Math.max(7, Math.round(flockSize / Math.ceil(flockSize / 9))))
+  const numFlocks = Math.ceil(flockSize / birdsPerV)
+  const out = []
+
+  for (let f = 0; f < numFlocks; f += 1) {
+    const lead = pool[Math.floor((f / numFlocks) * pool.length) % pool.length]
+    const count = Math.min(birdsPerV, flockSize - out.length)
+    // Bearing from north (rad): π = south; slight SSW/SSE variety per sub-flock.
+    const bearing = Math.PI + (f % 2 === 0 ? -0.28 : 0.28)
+    const dirLng = Math.sin(bearing)
+    const dirLat = Math.cos(bearing)
+    const perpLng = -dirLat
+    const perpLat = dirLng
+    const backStep = 0.52
+    const sideStep = 0.4
+
+    for (let k = 0; k < count; k += 1) {
+      let dlng = 0
+      let dlat = 0
+      if (k > 0) {
+        const wing = k % 2 === 1 ? -1 : 1
+        const rank = Math.ceil(k / 2)
+        const back = rank * backStep
+        const side = rank * sideStep
+        // Behind the tip = opposite of travel direction
+        dlng = -dirLng * back + perpLng * wing * side
+        dlat = -dirLat * back + perpLat * wing * side
+      }
+      out.push({
+        lng: lead.lng + dlng,
+        lat: lead.lat + dlat,
+        gbifID: lead.gbifID,
+        formationDirLng: dirLng,
+        formationDirLat: dirLat,
+      })
+    }
+  }
+
+  return out
+}
+
+function expandForFormation(pool, flockSize, formation) {
+  if (formation === 'v') return expandAsVFormation(pool, flockSize)
+  return expandPositions(pool, flockSize)
+}
+
+/**
  * Map a raw GBIF monthly occurrence count → visible dot count [minDots, maxDots].
  * Uses a shared log scale so species and seasons stay comparable.
  */
@@ -76,8 +133,10 @@ export function getJanuaryPositions(yearRecords) {
 
 /**
  * Build a flock of the requested size from a month's occurrence sample.
+ * @param {{ formation?: 'scatter' | 'v' }} [options]
  */
-export function buildFlock(yearRecords, month, flockSize) {
+export function buildFlock(yearRecords, month, flockSize, options = {}) {
+  const formation = options.formation ?? 'scatter'
   const pool = monthPositions(yearRecords, month)
   if (!pool.length) {
     // Fall back to any month in the year so the map is never empty.
@@ -89,14 +148,14 @@ export function buildFlock(yearRecords, month, flockSize) {
       }))
       .sort((a, b) => a.lat - b.lat)
     if (!any.length) return []
-    return expandPositions(any, flockSize).map((p, i) => ({
+    return expandForFormation(any, flockSize, formation).map((p, i) => ({
       id: `bird-${i}`,
       ...p,
       trail: [],
     }))
   }
 
-  return expandPositions(pool, flockSize).map((p, i) => ({
+  return expandForFormation(pool, flockSize, formation).map((p, i) => ({
     id: `bird-${i}`,
     ...p,
     trail: [],
@@ -141,9 +200,10 @@ export function resizeFlock(birds, yearRecords, month, flockSize) {
 /**
  * Pick N target positions from a month's records.
  * Sorted by latitude so flock motion stays coherent.
+ * @param {{ formation?: 'scatter' | 'v' }} [options]
  */
-export function getMonthTargets(yearRecords, month, flockSize) {
+export function getMonthTargets(yearRecords, month, flockSize, options = {}) {
   const pool = monthPositions(yearRecords, month)
   if (!pool.length || flockSize <= 0) return null
-  return expandPositions(pool, flockSize)
+  return expandForFormation(pool, flockSize, options.formation ?? 'scatter')
 }

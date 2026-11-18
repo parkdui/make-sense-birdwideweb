@@ -1,4 +1,6 @@
-/** Decode and sample local GISTEMP series + HadCRUT5 map grid. */
+import { TEMPERATURE } from '../config.js'
+
+/** Decode and sample local GISTEMP series + NCEP map grid. */
 
 const MONTH_KEY = (year, month) =>
   `${year}-${String(month).padStart(2, '0')}`
@@ -6,10 +8,15 @@ const MONTH_KEY = (year, month) =>
 /** Web Mercator cannot place ±90° — paint and place within this band. */
 export const MERCATOR_MAX_LAT = 85
 
+function hexToRgb(hex) {
+  const raw = hex.replace('#', '')
+  const n = Number.parseInt(raw, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
 /**
  * Absolute air temperature (°C) → RGBA.
- * White (≤ −20°C) → yellow → orange → red → purple (≥ 38°C).
- * Stops are anchored to real °C so seasons read clearly (not anomaly scale).
+ * Uses TEMPERATURE.colorStops — the same ramp as the legend.
  */
 export function absoluteToRgba(
   tempC,
@@ -17,15 +24,10 @@ export function absoluteToRgba(
 ) {
   if (!Number.isFinite(tempC)) return [0, 0, 0, 0]
 
-  // Piecewise stops in °C (not normalized) for stronger seasonal contrast
-  const stops = [
-    { t: vmin, c: [255, 255, 255] }, // ≤ -20 white
-    { t: 0, c: [255, 255, 180] }, // freezing — pale yellow
-    { t: 10, c: [255, 220, 60] }, // cool
-    { t: 20, c: [255, 140, 0] }, // mild — orange
-    { t: 28, c: [225, 6, 0] }, // hot — red
-    { t: vmax, c: [140, 0, 220] }, // ≥ 38 purple
-  ]
+  const stops = TEMPERATURE.colorStops.map((stop) => ({
+    t: stop.t,
+    c: hexToRgb(stop.color),
+  }))
 
   const t = Math.min(vmax, Math.max(vmin, tempC))
 
@@ -298,7 +300,7 @@ export function paintTemperatureViewport(
   data.fill(0)
 
   // Version prefix busts stale LUTs after colormap changes (HMR / same vmin/vmax)
-  const lutKey = `abs-v2|${vmin}|${vmax}|${alpha}`
+  const lutKey = `abs-v3|${vmin}|${vmax}|${alpha}|${TEMPERATURE.colorStops.map((s) => s.color).join(',')}`
   const { lut, lutMin, lutMax } = getLut(lutKey, { vmin, vmax, alpha })
 
   // Sparse geographic control grid (cellsX × cellsY cells → (cellsX+1)×(cellsY+1) points)
@@ -379,8 +381,7 @@ export function paintTemperatureViewport(
   if (!ctx) return
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, targetW, targetH)
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
+  ctx.imageSmoothingEnabled = false
   ctx.drawImage(buffer, 0, 0, targetW, targetH)
 }
 

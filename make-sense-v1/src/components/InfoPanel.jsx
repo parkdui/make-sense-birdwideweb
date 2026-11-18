@@ -1,5 +1,4 @@
 import { TIMELINE } from '../config.js'
-import { formatLicenseLabel } from '../utils/occurrences.js'
 
 function formatAnomaly(v) {
   if (!Number.isFinite(v)) return '—'
@@ -7,60 +6,87 @@ function formatAnomaly(v) {
   return `${sign}${v.toFixed(2)} °C`
 }
 
+/**
+ * @param {object[]} speciesList selected SPECIES_CATALOG entries
+ * @param {object[]} flockStats per-species month stats (optional)
+ */
 export default function InfoPanel({
   year,
   month,
   visibleCount,
   monthRecordCount,
-  gbifOccurrenceCount,
   yearRecordCount,
   totalCount,
-  meta,
-  speciesInfo,
+  speciesList = [],
+  flockStats = [],
   temperatureMeta,
   globalAnomaly,
   tempStatus,
   status,
 }) {
   const monthName = TIMELINE.months[month - 1]
-  const retrievedAt = meta?.retrievedAt
-    ? new Date(meta.retrievedAt).toLocaleString()
-    : '—'
-  const commonName = speciesInfo?.commonName ?? meta?.commonName ?? 'Species'
-  const scientificName =
-    speciesInfo?.scientificName ?? meta?.scientificName ?? ''
-  const speciesUrl =
-    speciesInfo?.gbifSpeciesUrl ??
-    meta?.speciesPage ??
-    'https://www.gbif.org/'
-  const imageUrl = speciesInfo?.imageUrl
-  const imageCredit = speciesInfo?.imageCredit
+  const multi = speciesList.length > 1
+  const title = multi
+    ? `${speciesList.length} species`
+    : (speciesList[0]?.commonName ?? 'Species')
+  const subtitle = multi
+    ? 'Compared on the same map & timeline'
+    : speciesList[0]?.scientificName ?? ''
 
   return (
     <aside className="info-panel" aria-label="Species and data information">
-      {imageUrl && (
-        <figure className="info-panel__figure">
-          <img
-            className="info-panel__image"
-            src={imageUrl}
-            alt={commonName}
-            loading="lazy"
-            decoding="async"
-          />
-          {imageCredit && (
-            <figcaption className="info-panel__image-credit">
-              Photo · {imageCredit}
-            </figcaption>
+      {speciesList.length > 0 && (
+        <div className="info-panel__thumbs" aria-hidden={speciesList.length === 0}>
+          {speciesList.map((s) =>
+            s.imageUrl ? (
+              <figure key={s.id} className="info-panel__thumb">
+                <img
+                  src={s.imageUrl}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+                <span
+                  className="info-panel__thumb-dot"
+                  style={{ backgroundColor: s.color }}
+                />
+              </figure>
+            ) : null,
           )}
-        </figure>
+        </div>
       )}
+
       <header className="info-panel__header">
         <p className="info-panel__eyebrow">Migration visualization</p>
-        <h1>{commonName}</h1>
-        <p className="info-panel__scientific">
-          <em>{scientificName}</em>
-        </p>
+        <h1>{title}</h1>
+        {subtitle && (
+          <p className="info-panel__scientific">
+            {multi ? subtitle : <em>{subtitle}</em>}
+          </p>
+        )}
       </header>
+
+      {multi && (
+        <ul className="info-panel__species-list">
+          {speciesList.map((s) => {
+            const stat = flockStats.find((f) => f.id === s.id)
+            return (
+              <li key={s.id}>
+                <span
+                  className="info-panel__species-swatch"
+                  style={{ backgroundColor: s.color }}
+                />
+                <span className="info-panel__species-name">{s.commonName}</span>
+                <span className="info-panel__species-dots">
+                  {status === 'ready' && stat
+                    ? `${stat.flockSize} dots`
+                    : '—'}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
       <dl className="info-panel__stats">
         <div>
@@ -80,14 +106,6 @@ export default function InfoPanel({
           <dd>{status === 'ready' ? visibleCount.toLocaleString() : '—'}</dd>
         </div>
         <div>
-          <dt>GBIF this month</dt>
-          <dd>
-            {status === 'ready' && gbifOccurrenceCount != null
-              ? gbifOccurrenceCount.toLocaleString()
-              : '—'}
-          </dd>
-        </div>
-        <div>
           <dt>Local sample</dt>
           <dd>
             {status === 'ready' ? monthRecordCount.toLocaleString() : '—'}
@@ -96,18 +114,13 @@ export default function InfoPanel({
       </dl>
 
       <p className="info-panel__disclaimer">
-        Map colors are absolute air temperature (°C): white ≤ −20°C through
-        yellow and red to purple ≥ 38°C. The number above is GISTEMP global
-        anomaly, not absolute heat. Not individual GPS tracks.
+        Map colors are absolute air temperature (°C). Dot count scales with GBIF
+        monthly occurrences per species. Not individual GPS tracks.
       </p>
 
       <p className="info-panel__source">
         <a href="https://www.gbif.org/" target="_blank" rel="noopener noreferrer">
           GBIF
-        </a>
-        {' · '}
-        <a href={speciesUrl} target="_blank" rel="noopener noreferrer">
-          species
         </a>
         {' · '}
         <a
@@ -133,30 +146,13 @@ export default function InfoPanel({
         )}
       </p>
 
-      {meta && (
-        <details key={meta.retrievedAt || 'meta'} className="info-panel__meta">
-          <summary>Dataset metadata</summary>
+      {temperatureMeta && (
+        <details className="info-panel__meta">
+          <summary>Temperature sources</summary>
           <p>
-            Retrieved: <time dateTime={meta.retrievedAt}>{retrievedAt}</time>
+            Temp series: {temperatureMeta.seriesSource}. Map grid:{' '}
+            {temperatureMeta.gridSource}.
           </p>
-          <p>
-            taxonKey: {meta.taxonKey} · {meta.sampling}
-          </p>
-          {temperatureMeta && (
-            <p>
-              Temp series: {temperatureMeta.seriesSource}. Map grid:{' '}
-              {temperatureMeta.gridSource}.
-            </p>
-          )}
-          {meta.licenses?.length > 0 && (
-            <ul className="info-panel__licenses">
-              {meta.licenses.map(({ license, count }) => (
-                <li key={license}>
-                  {formatLicenseLabel(license)} ({count.toLocaleString()})
-                </li>
-              ))}
-            </ul>
-          )}
         </details>
       )}
     </aside>

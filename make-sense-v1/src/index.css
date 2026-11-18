@@ -33,7 +33,7 @@ body,
 body {
   font-family: var(--font-sans);
   color: var(--ink);
-  background: #d9ddd8;
+  background: #000;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }

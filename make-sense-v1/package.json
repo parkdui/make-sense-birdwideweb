@@ -14,13 +14,15 @@
     "fetch:eurasian-blackcap": "node scripts/fetch-eurasian-blackcap.mjs",
     "fetch:blackpoll-warbler": "node scripts/fetch-blackpoll-warbler.mjs",
     "enrich:month-counts": "node scripts/enrich-month-counts.mjs",
+    "extract:northernmost": "node scripts/extract-northernmost.mjs",
     "fetch:temperature": "node scripts/fetch-temperature.mjs"
   },
   "dependencies": {
     "gsap": "^3.15.1",
     "maplibre-gl": "^6.18.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
