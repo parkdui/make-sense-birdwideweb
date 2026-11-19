@@ -81,6 +81,86 @@ function useTypewriter(text, active) {
   return shown
 }
 
+function SideFold({ label, children }) {
+  const buttonRef = useGentleHover(false)
+  const shellRef = useRef(null)
+  const innerRef = useRef(null)
+  const closedSize = useRef({ w: 0, h: 0 })
+  const [open, setOpen] = useState(false)
+  const [grown, setGrown] = useState(false)
+
+  useEffect(() => {
+    if (open) setGrown(true)
+  }, [open])
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current
+    const inner = innerRef.current
+    if (!shell || !inner) return undefined
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (!grown) {
+      inner.style.width = ''
+      shell.style.width = ''
+      shell.style.height = ''
+      closedSize.current = { w: shell.offsetWidth, h: shell.offsetHeight }
+      const restore = window.setTimeout(() => {
+        if (shellRef.current) shellRef.current.style.transition = ''
+      }, 0)
+      return () => window.clearTimeout(restore)
+    }
+
+    const parentW = shell.parentElement?.clientWidth ?? shell.offsetWidth
+
+    if (!open) {
+      shell.style.transition = 'none'
+      setGrown(false)
+      return undefined
+    }
+
+    if (reduced) {
+      inner.style.width = `${parentW}px`
+      shell.style.width = `${parentW}px`
+      shell.style.height = 'auto'
+      return undefined
+    }
+
+    shell.style.transition = 'none'
+    inner.style.width = `${parentW}px`
+    shell.style.width = `${parentW}px`
+    shell.style.height = 'auto'
+    const fullH = shell.offsetHeight
+    const startW = closedSize.current.w || shell.offsetWidth
+    const startH = closedSize.current.h || shell.offsetHeight
+    shell.style.width = `${startW}px`
+    shell.style.height = `${startH}px`
+    shell.offsetHeight
+    shell.style.transition = ''
+    const frame = window.requestAnimationFrame(() => {
+      shell.style.width = `${parentW}px`
+      shell.style.height = `${fullH}px`
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, grown])
+
+  return (
+    <div className={`side-fold${grown ? ' is-open' : ''}`} ref={shellRef}>
+      <div className="side-fold__inner" ref={innerRef}>
+        <button
+          type="button"
+          ref={buttonRef}
+          className={`side-fold__button${open ? ' is-on' : ''}`}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {label}
+        </button>
+        <div className="side-fold__body">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 function BirdCast({ open, disabled, text, bird, onToggle }) {
   const toggleRef = useGentleHover(disabled)
   const shellRef = useRef(null)
@@ -492,6 +572,35 @@ export default function App() {
           />
           <p className="side__tagline">Where did the bird go?</p>
         </div>
+        <div className="side__notes">
+          <p className="side__intro">
+            Birds&apos; migration pattern is changing. One of the reasons is global
+            warming, as the temperature is increasing. In Bird Wide Web, see how
+            they went north or south compared with previous years.
+          </p>
+          <SideFold label="How to interact">
+            <p>
+              Click the circle checkbox at the top right of the bird card to see
+              birds on the map. You can also click the image to follow them.
+            </p>
+          </SideFold>
+          <SideFold label="About the source">
+            <p>
+              The records come from GBIF, 2000 to 2025. GBIF holds 25,529,876
+              coordinate records for these five species. That full set is not
+              on the map. It was trimmed to an even sample of about 16
+              sightings a month: 24,826 records for barn swallow, European
+              bee-eater, common crane, Eurasian blackcap, and blackpoll
+              warbler. Each month is that sample, not a tracked route.
+            </p>
+            <p>
+              The map is MapLibre, with Esri street tiles. The heat colors come
+              from temperature.json: NCEP/NCAR monthly mean air temperature, in
+              degrees Celsius. The year-to-year temperature in the writing is
+              NASA GISTEMP v4, compared with the 1951–1980 average.
+            </p>
+          </SideFold>
+        </div>
         <SpeciesSelector
           selectedIds={selectedIds}
           onToggle={toggleSpecies}
@@ -604,6 +713,7 @@ export default function App() {
       </div>
 
       <div className="bottom-dock">
+      <p className="bottom-dock__title">The shift in the northernmost line</p>
       <div className="year-dock">
         <Timeline
           year={activeYear}

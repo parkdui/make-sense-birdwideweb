@@ -62,6 +62,101 @@
   color: #fff;
 }
 
+.side__notes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.side__intro {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: rgba(242, 242, 242, 0.88);
+}
+
+.side-fold {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 23px;
+  background: transparent;
+  color: #111;
+  transition:
+    width 340ms ease,
+    height 340ms ease,
+    border-radius 340ms ease,
+    background-color 340ms ease;
+}
+
+.side-fold.is-open {
+  border-radius: 18px;
+  background: #f4f1ea;
+}
+
+.side-fold__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  box-sizing: border-box;
+}
+
+.side-fold.is-open .side-fold__inner {
+  gap: 10px;
+  padding: 12px;
+}
+
+.side-fold__button {
+  height: auto;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #000;
+  border-radius: 20px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: left;
+  cursor: pointer;
+}
+
+.side-fold__button.is-on {
+  background: #2a2323;
+  border-color: #2a2323;
+  color: #fff;
+}
+
+.side-fold__body {
+  display: none;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #1a1a1a;
+}
+
+.side-fold.is-open .side-fold__body {
+  display: block;
+}
+
+.side-fold__body p {
+  margin: 0;
+}
+
+.side-fold__body p + p {
+  margin-top: 0.75em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-fold {
+    transition: none;
+  }
+}
+
 .stage {
   grid-column: 2;
   grid-row: 1;
@@ -404,12 +499,25 @@
 
 .bottom-dock {
   flex: none;
-  height: calc((40vh - 16px) * 0.6);
-  min-height: 120px;
-  max-height: calc(100% - 140px);
+  height: calc((40vh - 16px) * 0.6 + 2rem);
+  min-height: calc(120px + 2rem);
+  max-height: calc(100% - 140px + 2rem);
   display: flex;
   flex-direction: column;
   background: #2a2323;
+}
+
+.bottom-dock__title {
+  flex: none;
+  height: 2rem;
+  margin: 0;
+  padding: 0 28px;
+  display: flex;
+  align-items: flex-end;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: rgba(242, 242, 242, 0.88);
 }
 
 .year-dock {
