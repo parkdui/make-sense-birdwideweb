@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { GBIF, SPECIES_CATALOG } from '../config.js'
+import { GBIF, SPECIES_CATALOG, TIMELINE } from '../config.js'
 import { useGentleHover } from '../hooks/useGentleHover.js'
 import { useNorthernmost } from '../hooks/useNorthernmost.js'
 
@@ -143,12 +143,12 @@ function NorthernDots({
 }
 
 /**
- * Year slider under the map. Months advance only while playback is running.
+ * Year slider under the map. The handle moves through every month, not only January.
  */
 export default function Timeline({
   year,
-  onYearChange,
   month,
+  onTimeChange,
   availableYears,
   selectedIds = [],
   focusMonths = null,
@@ -164,6 +164,11 @@ export default function Timeline({
   const first = years[0]
   const last = years[years.length - 1]
   const northernmost = useNorthernmost()
+  const maxIndex = Math.max(0, (last - first) * 12 + 11)
+  const value = Math.min(
+    maxIndex,
+    Math.max(0, (year - first) * 12 + (month - 1)),
+  )
 
   return (
     <section className="timeline" aria-label="Year timeline">
@@ -185,14 +190,19 @@ export default function Timeline({
           <input
             className="timeline__year-slider"
             type="range"
-            min={first}
-            max={last}
+            min={0}
+            max={maxIndex}
             step={1}
-            value={year}
+            value={value}
             disabled={disabled}
-            aria-label="Select year"
-            aria-valuetext={`${year}, month ${month}`}
-            onChange={(e) => onYearChange(Number(e.target.value))}
+            aria-label="Select month"
+            aria-valuetext={`${TIMELINE.months[month - 1] ?? month} ${year}`}
+            onChange={(event) => {
+              const index = Number(event.target.value)
+              const nextYear = first + Math.floor(index / 12)
+              const nextMonth = (index % 12) + 1
+              onTimeChange(nextYear, nextMonth)
+            }}
           />
         </div>
         <span className="timeline__year-end">{last}</span>

@@ -328,8 +328,11 @@ export default function App() {
   }, [])
 
   const toggleFollow = useCallback((id) => {
-    setFollowId((prev) => (prev === id ? null : id))
-  }, [])
+    const turningOn = followId !== id
+    setFollowId(turningOn ? id : null)
+    if (!turningOn) return
+    setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+  }, [followId])
 
   const followOnlyId =
     followId && !selectedIds.includes(followId) ? followId : null
@@ -360,7 +363,9 @@ export default function App() {
   const monthElapsedRef = useRef(0)
   /** Year step requested by a season filter, so the year change keeps that month. */
   const seasonStepRef = useRef(null)
-  /** This year change should glide, not snap, because a season filter advanced it. */
+  /** Month chosen on the slider, so a year change does not snap back to January. */
+  const scrubRef = useRef(null)
+  /** This year change should glide, not snap, because playback advanced into it. */
   const seasonGlideRef = useRef(false)
 
   const availableYears = useMemo(() => {
@@ -406,6 +411,12 @@ export default function App() {
     if (year == null || !ready) return
     monthElapsedRef.current = 0
     setPlaying(true)
+    const scrub = scrubRef.current
+    if (scrub && scrub.year === year) {
+      scrubRef.current = null
+      setMonth(scrub.month)
+      return
+    }
     const step = seasonStepRef.current
     if (step && step.year === year) {
       seasonStepRef.current = null
@@ -451,7 +462,22 @@ export default function App() {
       monthElapsedRef.current = 0
       const months = seasonMonths(summer, winter)
       if (!months) {
-        setMonth((prev) => (prev >= 12 ? 1 : prev + 1))
+        if (month < 12) {
+          setMonth(month + 1)
+          return
+        }
+        const years = yearsRef.current
+        const yearIndex = years.indexOf(activeYear)
+        const nextYear =
+          yearIndex < 0 ? activeYear : years[(yearIndex + 1) % years.length]
+        if (!years.length || nextYear === activeYear) {
+          setMonth(1)
+          return
+        }
+        seasonStepRef.current = { year: nextYear, month: 1 }
+        seasonGlideRef.current = true
+        setYear(nextYear)
+        setMonth(1)
         return
       }
       const index = months.indexOf(month)
@@ -573,7 +599,7 @@ export default function App() {
             />
             <img className="side__mark" src="/favicon.svg" alt="" />
           </div>
-          <p className="side__tagline">Where did the bird go?</p>
+          {/* <p className="side__tagline">Where did the bird go?</p> */}
         </div>
         <div className="side__notes">
           <p className="side__intro">
@@ -589,7 +615,11 @@ export default function App() {
           </SideFold>
           <SideFold label="About the source">
             <p>
-              The records come from GBIF, 2000 to 2025. GBIF holds 25,529,876
+              The website does not include the exact migration routes. Rather,
+              the visualization is based on the occurrences.
+            </p>
+            <p>
+              The records come from GBIF, 2000 to 2025. {' '} <a href="https://www.gbif.org/" target="_blank" rel="noopener noreferrer">GBIF</a> holds 25,529,876
               coordinate records for these five species. That full set is not
               on the map. It was trimmed to an even sample of about 16
               sightings a month: 24,826 records for barn swallow, European
@@ -597,7 +627,7 @@ export default function App() {
               warbler. Each month is that sample, not a tracked route.
             </p>
             <p>
-              The map is MapLibre, with Esri street tiles. The heat colors come
+              The map is {' '} <a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>, with Esri street tiles. The heat colors come
               from temperature.json: NCEP/NCAR monthly mean air temperature, in
               degrees Celsius. The year-to-year temperature in the writing is
               NASA GISTEMP v4, compared with the 1951–1980 average.
@@ -733,8 +763,17 @@ export default function App() {
       <div className="year-dock">
         <Timeline
           year={activeYear}
-          onYearChange={setYear}
           month={month}
+          onTimeChange={(nextYear, nextMonth) => {
+            monthElapsedRef.current = 0
+            if (nextYear === activeYear) {
+              setMonth(nextMonth)
+              return
+            }
+            scrubRef.current = { year: nextYear, month: nextMonth }
+            setYear(nextYear)
+            setMonth(nextMonth)
+          }}
           availableYears={availableYears}
           selectedIds={selectedIds}
           focusMonths={focusMonths}

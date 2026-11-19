@@ -198,6 +198,7 @@
   min-width: 0;
   min-height: 140px;
   background: #000;
+  overflow: hidden;
 }
 
 .map-stage {
@@ -396,7 +397,7 @@
 
 .map-season {
   height: 46px;
-  padding: 0 16px;
+  padding: 0 16px 0 12px;
   border: 1px solid #000;
   border-radius: 23px;
   background: #fff;
