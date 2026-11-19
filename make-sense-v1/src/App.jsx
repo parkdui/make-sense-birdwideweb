@@ -205,21 +205,22 @@ function BirdCast({ open, disabled, text, bird, onToggle }) {
 
     const parent = shell.parentElement?.clientWidth ?? 460
     const targetW = Math.min(460, Math.max(closedSize.current.w, parent - 32))
-    shell.style.transition = 'none'
-    inner.style.width = `${targetW}px`
-    shell.style.width = `${targetW}px`
-    shell.style.height = 'auto'
-
     const maxH = Math.max(
       closedSize.current.h,
       (shell.parentElement?.clientHeight ?? targetW) - 32,
     )
+
+    // Keep the visible height before measuring the new copy, so grow/shrink can ease.
+    const fromH = shell.getBoundingClientRect().height
+    shell.style.transition = 'none'
+    inner.style.width = `${targetW}px`
+    shell.style.width = `${targetW}px`
+    shell.style.height = 'auto'
     const fullH = Math.min(shell.offsetHeight, maxH)
     targetHRef.current = fullH
 
     if (wasGrown.current) {
-      const locked = shell.getBoundingClientRect().height
-      shell.style.height = `${locked}px`
+      shell.style.height = `${fromH || fullH}px`
       shell.offsetHeight
       shell.style.transition = ''
       const frame = window.requestAnimationFrame(() => {

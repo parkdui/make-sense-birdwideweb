@@ -260,8 +260,11 @@ export default function Splash({ onDone }) {
           ease: 'power2.inOut',
           onUpdate: () => {
             letter.style.transform = `scaleX(${state.scale})`
-            const extra = (state.scale - 1) * letter.offsetWidth
-            rest.style.transform = `translateX(${extra}px)`
+            rest.style.transform = 'translateX(0px)'
+            const gap = letter.getBoundingClientRect().right - rest.getBoundingClientRect().left
+            // Serif W grows past its box; keep a little air before "ide" / "eb".
+            const pad = letter.offsetWidth * 0.06 * (state.scale - 1)
+            rest.style.transform = `translateX(${Math.max(0, gap) + pad}px)`
           },
         },
         at,

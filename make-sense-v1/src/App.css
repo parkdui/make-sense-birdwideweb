@@ -513,20 +513,22 @@
 }
 
 .map-birdcast__text {
-  display: grid;
+  position: relative;
   margin: 0;
   font-size: 1.2rem;
   line-height: 1.45;
   font-weight: 500;
 }
 
-.map-birdcast__typed,
-.map-birdcast__reserve {
-  grid-area: 1 / 1;
+/* Only the reserve sizes the panel; typed paints on top as it types. */
+.map-birdcast__typed {
+  position: absolute;
+  inset: 0;
 }
 
 .map-birdcast__reserve {
   visibility: hidden;
+  display: block;
 }
 
 @media (prefers-reduced-motion: reduce) {
