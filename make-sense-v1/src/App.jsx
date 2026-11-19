@@ -669,7 +669,22 @@ export default function App() {
           onFollowToggle={toggleFollow}
           disabled={false}
         />
-        <p className="side__about">This website was created during Pascal Wicht's 4-day long workshop "Make Sense", November 16-19 2026, at ECAL DXD, in Lausanne, Switzerland. As a pigeon lover, nature lover, designer, I wanted to show how temperatures affected occurences of birds. For more information about me, click my <a href="https://www.instagram.com/pkg_one/">instagram</a>.</p>
+        <p className="side__about">
+          This website was created during Pascal Wicht&apos;s 4-day long workshop
+          &quot;Make Sense&quot;, November 16-19 2026, at ECAL DXD, in Lausanne,
+          Switzerland. As a pigeon lover, nature lover, designer, I wanted to
+          show how temperatures affected occurences of birds. For more
+          information about me, click my{' '}
+          <a
+            className="side__about-link"
+            href="https://www.instagram.com/pkg_one/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            instagram
+          </a>
+          .
+        </p>
         
       </aside>
 
