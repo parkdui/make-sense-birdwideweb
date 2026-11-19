@@ -565,11 +565,14 @@ export default function App() {
       {showSplash && <Splash onDone={() => setShowSplash(false)} />}
       <aside className="side">
         <div className="side__brand">
-          <img
-            className="side__logo"
-            src="/logo_ver1.svg"
-            alt="Bird Wide Web"
-          />
+          <div className="side__lockup">
+            <img
+              className="side__logo"
+              src="/logo_ver1.svg"
+              alt="Bird Wide Web"
+            />
+            <img className="side__mark" src="/favicon.svg" alt="" />
+          </div>
           <p className="side__tagline">Where did the bird go?</p>
         </div>
         <div className="side__notes">
@@ -598,6 +601,17 @@ export default function App() {
               from temperature.json: NCEP/NCAR monthly mean air temperature, in
               degrees Celsius. The year-to-year temperature in the writing is
               NASA GISTEMP v4, compared with the 1951–1980 average.
+            </p>
+            <p>
+              The photographs on the bird cards are from{' '}
+              <a
+                href="https://ebird.org/home"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                eBird
+              </a>
+              .
             </p>
           </SideFold>
         </div>
@@ -683,13 +697,14 @@ export default function App() {
             {TIMELINE.months[month - 1] ?? ''} {activeYear}
         </div>
         <button
-          type="button"
+            type="button"
             ref={summerHoverRef}
             className={`map-season${summer ? ' is-on' : ''}`}
             aria-pressed={summer}
             disabled={controlsDisabled}
             onClick={() => setSummer((value) => !value)}
           >
+            <img className="map-season__icon" src="/icon_summer.svg" alt="" />
             Summer
           </button>
           <button
@@ -700,8 +715,9 @@ export default function App() {
             disabled={controlsDisabled}
             onClick={() => setWinter((value) => !value)}
           >
+            <img className="map-season__icon" src="/icon_winter.svg" alt="" />
             Winter
-        </button>
+          </button>
         </div>
         <BirdCast
           open={birdCast}
