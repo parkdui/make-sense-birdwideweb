@@ -17,6 +17,7 @@ export const SPECIES_CATALOG = [
     imageUrl:
       'https://cdn.download.ams.birds.cornell.edu/api/v2/asset/312652671/2400',
     imageCredit: 'Macaulay Library',
+    soundUrl: '/sounds/barn-swallow.mp3',
     blurb:
       'I usually nest near human settlements, in barns. I go south in autumn, then return north in spring to breed.',
   },
@@ -31,6 +32,7 @@ export const SPECIES_CATALOG = [
     imageUrl:
       'https://cdn.download.ams.birds.cornell.edu/api/v2/asset/459241061/2400',
     imageCredit: 'Macaulay Library',
+    soundUrl: '/sounds/european-bee-eater.mp3',
     blurb:
       'I breed in sandy banks across southern Europe and spend the northern winter in Africa.',
   },
@@ -45,6 +47,7 @@ export const SPECIES_CATALOG = [
     imageUrl:
       'https://cdn.download.ams.birds.cornell.edu/api/v2/asset/168488341/2400',
     imageCredit: 'Macaulay Library',
+    soundUrl: '/sounds/common-crane.mp3',
     blurb:
       'I breed in northern wetlands and travel in flocks between Europe and Africa.',
   },
@@ -58,6 +61,7 @@ export const SPECIES_CATALOG = [
     color: '#1f9d55',
     imageUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v2/asset/459237521/2400',
     imageCredit: 'Macaulay Library',
+    soundUrl: '/sounds/eurasian-blackcap.mp3',
     blurb:
       'I breed in European woodland. Many of us move to the Mediterranean or Africa outside summer.',
   },
@@ -72,6 +76,7 @@ export const SPECIES_CATALOG = [
     imageUrl:
       'https://cdn.download.ams.birds.cornell.edu/api/v2/asset/64804711/2400',
     imageCredit: 'Macaulay Library',
+    soundUrl: '/sounds/blackpoll-warbler.mp3',
     blurb:
       'I breed in northern North America and migrate to South America for the northern winter.',
   },

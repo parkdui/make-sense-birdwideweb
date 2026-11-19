@@ -334,6 +334,22 @@ export default function App() {
     setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
   }, [followId])
 
+  // Loop that bird's call while the photo follow is on; stop when follow ends.
+  useEffect(() => {
+    if (!followId) return undefined
+    const soundUrl = SPECIES_CATALOG.find((species) => species.id === followId)
+      ?.soundUrl
+    if (!soundUrl) return undefined
+    const audio = new Audio(soundUrl)
+    audio.loop = true
+    audio.play().catch(() => {})
+    return () => {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+    }
+  }, [followId])
+
   const followOnlyId =
     followId && !selectedIds.includes(followId) ? followId : null
 
@@ -652,14 +668,8 @@ export default function App() {
           onFollowToggle={toggleFollow}
           disabled={false}
         />
-        <a
-          className="side__about"
-          href="https://www.gbif.org/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          About data
-        </a>
+        <p className="side__about">This website was created during Pascal Wicht's 4-day long workshop "Make Sense", November 16-19 2026, at ECAL DXD, in Lausanne, Switzerland. As a pigeon lover, nature lover, designer, I wanted to show how temperatures affected occurences of birds. For more information about me, click my <a href="https://www.instagram.com/pkg_one/">instagram</a>.</p>
+        
       </aside>
 
       <div className="stage">
